@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from collections import deque
+from datetime import datetime, timedelta
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -18,12 +19,22 @@ from homeassistant.core import (
 )
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.script import Script
 from homeassistant.util import dt as dt_util
 
+from .circadian import DaypartBoundaries, compute_daypart
+from .climate import ClimateFacet
 from .const import (
+    COMMAND_BRIGHTEN,
     COMMAND_CYCLE_STATES,
+    COMMAND_DIM,
+    COMMAND_LIGHTS_OFF,
+    COMMAND_LIGHTS_ON,
     COMMAND_MAKE_VACANT,
     COMMAND_RESUME_AUTOMATIC,
     COMMAND_RUN_ACTIONS,
@@ -40,9 +51,20 @@ from .const import (
     EVIDENCE_MODE_ANY,
     PRESENCE_ACTIVE_STATES,
     TRIGGER_ANY,
+    Authority,
+    Daypart,
     Phase,
 )
+from .lighting import LightingFacet
 from .models import ControlBinding, ExperienceState, SpaceConfig, fallback_state
+
+TICK_INTERVAL = timedelta(minutes=5)
+LIGHTING_COMMANDS = (
+    COMMAND_LIGHTS_ON,
+    COMMAND_LIGHTS_OFF,
+    COMMAND_BRIGHTEN,
+    COMMAND_DIM,
+)
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -88,10 +110,23 @@ class SpaceEngine:
         self._listeners: list[CALLBACK_TYPE] = []
         self._unsub_track: CALLBACK_TYPE | None = None
         self._bus_unsubs: list[CALLBACK_TYPE] = []
+        self._tick_unsub: CALLBACK_TYPE | None = None
         self._wake_cancel: CALLBACK_TYPE | None = None
         self._clear_cancel: CALLBACK_TYPE | None = None
         self._cooldown_cancel: CALLBACK_TYPE | None = None
         self._scripts: dict[str, Script | None] = {}
+        self._own_context_ids: deque[str] = deque(maxlen=64)
+        self._boundaries = DaypartBoundaries.from_strings(
+            self.config.morning_start,
+            self.config.day_start,
+            self.config.evening_start,
+            self.config.night_start,
+        )
+        self.daypart: Daypart = compute_daypart(
+            dt_util.now().time(), self._boundaries
+        )
+        self.lighting = LightingFacet(self)
+        self.climate = ClimateFacet(self)
 
     # ---------------------------------------------------------------- setup
 
@@ -107,6 +142,11 @@ class SpaceEngine:
         for control in self.config.controls:
             if control.kind == CONTROL_KIND_ENTITY and control.entity_id:
                 tracked.add(control.entity_id)
+        tracked.update(self.config.all_profile_lights)
+        tracked.update(self.config.climate_entities)
+        tracked.update(self.config.window_sensors)
+        if self.config.illuminance_sensor:
+            tracked.add(self.config.illuminance_sensor)
         if tracked:
             self._unsub_track = async_track_state_change_event(
                 self.hass, sorted(tracked), self._handle_entity_event
@@ -120,6 +160,9 @@ class SpaceEngine:
             self._bus_unsubs.append(
                 self.hass.bus.async_listen(event_type, self._handle_bus_control_event)
             )
+        self._tick_unsub = async_track_time_interval(
+            self.hass, self._handle_tick, TICK_INTERVAL
+        )
         if self.presence_active:
             self.phase = Phase.OCCUPIED
             self.active_state = self._infer_state()
@@ -133,7 +176,64 @@ class SpaceEngine:
             self._unsub_track = None
         while self._bus_unsubs:
             self._bus_unsubs.pop()()
+        if self._tick_unsub:
+            self._tick_unsub()
+            self._tick_unsub = None
+        self.lighting.cleanup()
+        self.climate.cleanup()
         self._cancel_all_timers()
+
+    # ---------------------------------------------------- contexts & layers
+
+    def new_context(self) -> Context:
+        """A context for engine-originated commands; used to tell our own
+        device changes apart from human ones (takeover detection)."""
+        context = Context()
+        self._own_context_ids.append(context.id)
+        return context
+
+    def is_own_context(self, context: Context | None) -> bool:
+        if context is None:
+            return False
+        return (
+            context.id in self._own_context_ids
+            or context.parent_id in self._own_context_ids
+        )
+
+    @callback
+    def async_notify(self) -> None:
+        self._notify()
+
+    def fire_authority_event(self, facet: str, authority: Authority) -> None:
+        self._fire_event(
+            "authority_changed", {"facet": facet, "to": authority.value}
+        )
+
+    def fire_facet_event(self, facet: str, what: str) -> None:
+        self._fire_event("facet_event", {"facet": facet, "event": what})
+
+    @callback
+    def _handle_tick(self, _now: datetime) -> None:
+        new_daypart = compute_daypart(dt_util.now().time(), self._boundaries)
+        if new_daypart is not self.daypart:
+            self.daypart = new_daypart
+            if (
+                self.enabled
+                and self.phase is Phase.OCCUPIED
+                and any(state.dayparts for state in self.config.states)
+            ):
+                self._set_experience(self._pick_state())
+                self._sync_clear_timer()
+            self._notify()
+        if self.enabled:
+            self.lighting.on_tick()
+
+    @callback
+    def async_resume_all(self) -> None:
+        """The resume button: clear overrides and all manual authority."""
+        self.lighting.set_authority(Authority.AUTO)
+        self.climate.set_authority(Authority.AUTO)
+        self.async_set_override(None)
 
     @callback
     def async_add_listener(self, update_callback: CALLBACK_TYPE) -> CALLBACK_TYPE:
@@ -200,6 +300,14 @@ class SpaceEngine:
         )
         if not self.enabled:
             return
+        if entity_id in self.config.all_profile_lights:
+            self.lighting.on_light_event(event)
+        if entity_id == self.config.illuminance_sensor:
+            self.lighting.on_lux_event()
+        if entity_id in self.config.climate_entities:
+            self.climate.on_climate_event(event)
+        if entity_id in self.config.window_sensors:
+            self.climate.on_window_event(event)
         if entity_id in self.config.presence_entities:
             self._evaluate_presence()
         if self.phase is Phase.OCCUPIED:
@@ -213,9 +321,7 @@ class SpaceEngine:
             self._cancel_cooldown()
             if self.phase is Phase.VACANT:
                 if self.config.wake_duration > 0:
-                    self._set_phase(Phase.WAKING)
-                    self._run_actions("phase_wake", self.config.wake_actions)
-                    self._schedule_wake()
+                    self._enter_waking()
                 else:
                     self._become_occupied()
             elif self.phase is Phase.WAKING and self._wake_cancel is None:
@@ -243,6 +349,15 @@ class SpaceEngine:
     # ----------------------------------------------------------- transitions
 
     @callback
+    def _enter_waking(self) -> None:
+        self._set_phase(Phase.WAKING)
+        if self.config.wake_actions:
+            self._run_actions("phase_wake", self.config.wake_actions)
+        else:
+            self.lighting.on_wake()
+        self._schedule_wake()
+
+    @callback
     def _become_occupied(self) -> None:
         self._cancel_wake()
         self._set_phase(Phase.OCCUPIED)
@@ -256,9 +371,13 @@ class SpaceEngine:
         self.override_id = None
         self._set_phase(Phase.VACANT)
         if passing and self.config.pass_through_actions:
-            self._run_actions("phase_pass_through", self.config.pass_through_actions)
+            actions = self.config.pass_through_actions
+            self._run_actions("phase_pass_through", actions)
         else:
-            self._run_actions("phase_vacant", self.config.vacant_actions)
+            actions = self.config.vacant_actions
+            self._run_actions("phase_vacant", actions)
+        self.lighting.on_vacant(actions_ran=bool(actions))
+        self.climate.on_vacant()
 
     @callback
     def _set_phase(self, new_phase: Phase) -> None:
@@ -287,6 +406,9 @@ class SpaceEngine:
         self.state_since = dt_util.utcnow() if new_state else None
         if run_actions and new_state:
             self._run_actions(f"state_{new_state.id}_enter", new_state.enter_actions)
+        if run_actions:
+            self.lighting.on_experience(new_state)
+            self.climate.on_experience(new_state)
         self._fire_event(
             EVENT_STATE_CHANGED,
             {
@@ -339,7 +461,12 @@ class SpaceEngine:
             self._set_experience(None)
             if self.config.cooldown_duration > 0:
                 self._set_phase(Phase.COOLDOWN)
-                self._run_actions("phase_cooldown", self.config.cooldown_actions)
+                if self.config.cooldown_actions:
+                    self._run_actions(
+                        "phase_cooldown", self.config.cooldown_actions
+                    )
+                else:
+                    self.lighting.on_cooldown()
                 self._cooldown_cancel = async_call_later(
                     self.hass, self.config.cooldown_duration, self._cooldown_timer_fired
                 )
@@ -389,6 +516,8 @@ class SpaceEngine:
 
     def _infer_state(self) -> ExperienceState:
         for state in self.config.selectable_states:
+            if state.dayparts and self.daypart.value not in state.dayparts:
+                continue
             if self._evidence_matches(state):
                 return state
         return fallback_state()
@@ -502,7 +631,9 @@ class SpaceEngine:
             return
         if not self.enabled:
             return
-        if command == COMMAND_SET_STATE:
+        if command in LIGHTING_COMMANDS:
+            self.lighting.command(command)
+        elif command == COMMAND_SET_STATE:
             if control.state_id:
                 self.async_command_state(control.state_id)
         elif command == COMMAND_CYCLE_STATES:
@@ -537,9 +668,7 @@ class SpaceEngine:
         if self.phase is not Phase.VACANT:
             return
         if self.config.wake_duration > 0:
-            self._set_phase(Phase.WAKING)
-            self._run_actions("phase_wake", self.config.wake_actions)
-            self._schedule_wake()
+            self._enter_waking()
             # Nobody may actually show up; treat it like a pass-through then.
             self._schedule_clear(self.config.pass_through_delay)
         else:
@@ -553,7 +682,7 @@ class SpaceEngine:
         if (script := self._get_script(key, sequence)) is None:
             return
         self.hass.async_create_task(
-            script.async_run(context=Context()),
+            script.async_run(context=self.new_context()),
             f"{DOMAIN} {self.config.name} {key}",
         )
 
@@ -601,6 +730,9 @@ class SpaceEngine:
             "override": self.override_id,
             "enabled": self.enabled,
             "holding": self._holding,
+            "daypart": self.daypart.value,
+            "lighting": self.lighting.snapshot(),
+            "climate": self.climate.snapshot(),
             "controls": [control.id for control in self.config.controls],
             "presence": {
                 entity_id: getattr(self.hass.states.get(entity_id), "state", None)

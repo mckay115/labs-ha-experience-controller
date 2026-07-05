@@ -91,6 +91,37 @@ Copy `custom_components/labs_experience` into your config's
    out*). Start the TV: movie lighting, and the room stays occupied for the
    whole film. Turn the TV off and leave: fade down, lights off.
 
+## Room profile & habitat intelligence
+
+Assign what lives in the space — light roles (ambient/task/accent/night),
+climate, windows, doors, media, an illuminance sensor — or click **Fill
+the room profile from the area** and it's built from the HA registries in
+one step (creating a space with an area does this automatically). With a
+profile, the space behaves well with *zero* further configuration:
+
+- **Wake** → night-role lights dim on (only when dark), **occupied** →
+  ambient on the **circadian curve** (color temperature and brightness
+  follow the sun, ~2200 K nights to ~5500 K days, drifting every 5
+  minutes), **cool-down** → fade, **vacant** → off. Your own phase/state
+  actions always take precedence.
+- **Lux intelligence:** a threshold stops lights coming on in bright
+  rooms, and an optional **target light level** runs a closed loop —
+  initial brightness is estimated from the measured deficit, then nudged
+  as daylight changes (deadband + rate-limited, never oscillates).
+- **Manual control is sacred:** touch a wall switch, dimmer, app, or
+  voice and the space's *lighting authority* flips to **manual** — the
+  engine stops adjusting lights but the experience state doesn't move.
+  Automation resumes when the room empties, via *Resume automatic*, the
+  Lighting select, or an optional timed hold. Control bindings gain
+  `lights on/off/brighten/dim` verbs that do the same.
+- **Climate (opt-in):** per-state comfort intents (comfort/eco/off),
+  eco setback when vacant, and window-pause — a window open past the
+  delay saves the thermostat state and pauses; closing restores it.
+- **Dayparts:** every space knows morning/day/evening/night (sun +
+  configurable times). States can be limited to dayparts — a *Night
+  light* baseline that only exists at night — and the daypart sensor
+  exposes live circadian targets for dashboards.
+
 ## Modeling a multi-state room
 
 **Priorities are your transition graph.** Give every activity a state, rank
@@ -122,10 +153,13 @@ dark.
 | Entity | Purpose |
 | --- | --- |
 | `select.<space>_experience` | Current experience. Selecting = manual override (until vacant or *Resume automatic*). |
-| `sensor.<space>_phase` | `vacant` / `waking` / `occupied` / `cooldown`, with since/presence/override attributes. |
+| `select.<space>_lighting` | Lighting authority: automatic or manual (with a room profile). |
+| `sensor.<space>_phase` | `vacant` / `waking` / `occupied` / `cooldown`, with since/presence/override/authority attributes. |
+| `sensor.<space>_daypart` | Morning/day/evening/night, with live circadian kelvin/brightness targets. |
 | `binary_sensor.<space>_occupied` | On while waking or occupied. |
 | `switch.<space>_automation` | Pause/resume this space's engine (survives restarts). |
-| `button.<space>_resume_automatic` | Clear a manual override. |
+| `switch.<space>_circadian` | Enable/disable circadian drift (with a room profile). |
+| `button.<space>_resume_automatic` | Clear manual overrides and manual lighting/climate authority. |
 
 **Actions (services)** — target the space's select entity:
 

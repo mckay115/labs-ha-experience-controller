@@ -15,7 +15,7 @@
           "cooldown_duration": "Cool-down duration"
         },
         "data_description": {
-          "presence_entities": "Motion, occupancy, mmWave, zone, person, or count entities that mean someone is in this space. Numeric states above zero count as presence.",
+          "presence_entities": "Motion, occupancy, mmWave, zone, person, or count entities that mean someone is in this space. Numeric states above zero count as presence. Leave empty to auto-fill from the chosen area.",
           "presence_match": "Comma-separated extra states that count as presence — e.g. this room's name for BLE room trackers (Bermuda, ESPresense).",
           "wake_duration": "Seconds presence must persist before the space counts as fully occupied.",
           "clear_delay": "Seconds after presence clears (while occupied) before the space starts cooling down.",
@@ -23,6 +23,9 @@
           "cooldown_duration": "Seconds spent winding down before the space is vacant. Set to 0 to skip."
         }
       }
+    },
+    "error": {
+      "presence_required": "Pick presence entities, or choose an area so they can be auto-filled."
     },
     "abort": {
       "already_configured": "A space with this name already exists."
@@ -34,6 +37,10 @@
         "title": "Manage this space",
         "menu_options": {
           "basics": "Presence & timing",
+          "profile": "Room profile (lights, climate, media, openings)",
+          "fill_from_area": "Fill the room profile from the area",
+          "lighting_settings": "Lighting & circadian settings",
+          "climate_settings": "Climate settings",
           "phase_actions": "Wake, cool-down, vacant & pass-through actions",
           "add_state": "Add an experience state",
           "edit_state": "Edit an experience state",
@@ -64,6 +71,63 @@
           "cooldown_duration": "Seconds spent winding down before the space is vacant. Set to 0 to skip."
         }
       },
+      "profile": {
+        "title": "Room profile",
+        "description": "Assign what lives in this space. Roles let the engine light, heat, and read the room intelligently.",
+        "data": {
+          "lights_ambient": "Ambient lights",
+          "lights_task": "Task lights",
+          "lights_accent": "Accent lights",
+          "lights_night": "Night lights",
+          "climate_entities": "Climate",
+          "window_sensors": "Windows",
+          "door_sensors": "Doors",
+          "media_entities": "Media players",
+          "appliance_entities": "Appliances",
+          "illuminance_sensor": "Illuminance sensor",
+          "lux_threshold": "Dark below",
+          "target_lux": "Target light level"
+        },
+        "data_description": {
+          "lights_night": "Used for gentle wake acknowledgement; falls back to ambient at low brightness.",
+          "lux_threshold": "Lights only turn on automatically when the room is darker than this.",
+          "target_lux": "Keep the room at this measured level: brightness is estimated from the deficit at turn-on, then nudged as the sensor changes (deadband and rate-limited). 0 disables; circadian then drives brightness."
+        }
+      },
+      "lighting_settings": {
+        "title": "Lighting & circadian",
+        "data": {
+          "auto_lighting": "Automatic lighting",
+          "circadian_enabled": "Circadian color & brightness",
+          "min_kelvin": "Night color temperature",
+          "max_kelvin": "Day color temperature",
+          "min_brightness": "Night brightness",
+          "max_brightness": "Day brightness",
+          "manual_hold": "Manual hold time",
+          "morning_start": "Morning starts",
+          "day_start": "Day starts",
+          "evening_start": "Evening starts",
+          "night_start": "Night starts"
+        },
+        "data_description": {
+          "auto_lighting": "Built-in wake, occupied, cool-down, and off lighting for the profile lights. Explicit phase/state actions always take precedence.",
+          "circadian_enabled": "Drift color temperature and brightness with the sun while the space is occupied.",
+          "manual_hold": "How long a manual takeover lasts before automation resumes. 0 keeps manual control until the space is vacant."
+        }
+      },
+      "climate_settings": {
+        "title": "Climate",
+        "data": {
+          "comfort_temp": "Comfort temperature",
+          "eco_temp": "Eco temperature",
+          "vacant_climate": "When vacant",
+          "window_pause_delay": "Window pause delay"
+        },
+        "data_description": {
+          "vacant_climate": "Climate intent applied when the space empties. Keep means never touch the thermostat.",
+          "window_pause_delay": "Seconds a window must stay open before climate pauses; it restores when all windows close."
+        }
+      },
       "phase_actions": {
         "title": "Phase actions",
         "description": "Actions that run when the space wakes (gentle acknowledgement), starts cooling down, goes vacant, or was only passed through. Use conditions inside the actions for time-of-day variants.",
@@ -87,6 +151,12 @@
           "evidence_mode": "Evidence mode",
           "active_states": "Active states",
           "hold_occupancy": "Hold occupancy while evidence is active",
+          "dayparts": "Limit to dayparts",
+          "light_roles": "Light roles",
+          "light_brightness": "Brightness",
+          "light_color": "Color",
+          "light_exclusive": "Turn other profile lights off",
+          "climate_intent": "Climate",
           "enter_actions": "Enter actions",
           "exit_actions": "Exit actions"
         },
@@ -95,6 +165,10 @@
           "evidence_entities": "Entities whose state indicates this experience. Leave empty to make this the baseline state.",
           "active_states": "Comma-separated entity states that count as active evidence.",
           "hold_occupancy": "Keep the space occupied while this state's evidence is active, even if motion stops — perfect for movie night.",
+          "dayparts": "Only match during these dayparts. Empty means always.",
+          "light_roles": "Which profile lights this state turns on. Empty leaves lighting to enter actions or the built-in baseline.",
+          "light_brightness": "Fixed brightness for this state. Empty follows the circadian curve.",
+          "climate_intent": "Comfort intent applied when this state becomes active.",
           "enter_actions": "Runs when the space enters this state.",
           "exit_actions": "Runs when the space leaves this state."
         }
@@ -115,6 +189,12 @@
           "evidence_mode": "Evidence mode",
           "active_states": "Active states",
           "hold_occupancy": "Hold occupancy while evidence is active",
+          "dayparts": "Limit to dayparts",
+          "light_roles": "Light roles",
+          "light_brightness": "Brightness",
+          "light_color": "Color",
+          "light_exclusive": "Turn other profile lights off",
+          "climate_intent": "Climate",
           "enter_actions": "Enter actions",
           "exit_actions": "Exit actions"
         },
@@ -123,6 +203,10 @@
           "evidence_entities": "Entities whose state indicates this experience. Leave empty to make this the baseline state.",
           "active_states": "Comma-separated entity states that count as active evidence.",
           "hold_occupancy": "Keep the space occupied while this state's evidence is active, even if motion stops — perfect for movie night.",
+          "dayparts": "Only match during these dayparts. Empty means always.",
+          "light_roles": "Which profile lights this state turns on. Empty leaves lighting to enter actions or the built-in baseline.",
+          "light_brightness": "Fixed brightness for this state. Empty follows the circadian curve.",
+          "climate_intent": "Comfort intent applied when this state becomes active.",
           "enter_actions": "Runs when the space enters this state.",
           "exit_actions": "Runs when the space leaves this state."
         }
@@ -203,7 +287,8 @@
     "abort": {
       "state_not_found": "That state no longer exists.",
       "control_not_found": "That control no longer exists.",
-      "no_press_detected": "No press was detected within 30 seconds. Open the menu and try again."
+      "no_press_detected": "No press was detected within 30 seconds. Open the menu and try again.",
+      "no_area": "This space has no area assigned. Set one under Presence & timing first."
     }
   },
   "selector": {
@@ -221,7 +306,43 @@
         "wake": "Wake the space",
         "make_vacant": "Put the space to sleep",
         "toggle_automation": "Toggle space automation",
-        "run_actions": "Run custom actions"
+        "run_actions": "Run custom actions",
+        "lights_on": "Lights on (then manual)",
+        "lights_off": "Lights off (then manual)",
+        "brighten": "Brighten lights (then manual)",
+        "dim": "Dim lights (then manual)"
+      }
+    },
+    "dayparts": {
+      "options": {
+        "morning": "Morning",
+        "day": "Day",
+        "evening": "Evening",
+        "night": "Night"
+      }
+    },
+    "light_roles": {
+      "options": {
+        "ambient": "Ambient",
+        "task": "Task",
+        "accent": "Accent",
+        "night": "Night"
+      }
+    },
+    "light_color": {
+      "options": {
+        "circadian": "Circadian (follows the sun)",
+        "warm": "Warm (2700 K)",
+        "neutral": "Neutral (4000 K)",
+        "cool": "Cool (5500 K)"
+      }
+    },
+    "climate_intent": {
+      "options": {
+        "keep": "Keep (don't touch)",
+        "comfort": "Comfort",
+        "eco": "Eco",
+        "off": "Off"
       }
     }
   },
@@ -229,6 +350,13 @@
     "select": {
       "experience": {
         "name": "Experience"
+      },
+      "lighting": {
+        "name": "Lighting",
+        "state": {
+          "auto": "Automatic",
+          "manual": "Manual"
+        }
       }
     },
     "sensor": {
@@ -240,6 +368,15 @@
           "occupied": "Occupied",
           "cooldown": "Cool-down"
         }
+      },
+      "daypart": {
+        "name": "Daypart",
+        "state": {
+          "morning": "Morning",
+          "day": "Day",
+          "evening": "Evening",
+          "night": "Night"
+        }
       }
     },
     "binary_sensor": {
@@ -250,6 +387,9 @@
     "switch": {
       "automation": {
         "name": "Automation"
+      },
+      "circadian": {
+        "name": "Circadian lighting"
       }
     },
     "button": {

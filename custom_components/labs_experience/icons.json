@@ -3,6 +3,12 @@
     "select": {
       "experience": {
         "default": "mdi:theater"
+      },
+      "lighting": {
+        "default": "mdi:lightbulb-auto",
+        "state": {
+          "manual": "mdi:hand-back-right"
+        }
       }
     },
     "sensor": {
@@ -14,6 +20,15 @@
           "occupied": "mdi:account",
           "cooldown": "mdi:weather-sunset-down"
         }
+      },
+      "daypart": {
+        "default": "mdi:theme-light-dark",
+        "state": {
+          "morning": "mdi:weather-sunset-up",
+          "day": "mdi:weather-sunny",
+          "evening": "mdi:weather-sunset-down",
+          "night": "mdi:weather-night"
+        }
       }
     },
     "binary_sensor": {
@@ -24,6 +39,9 @@
     "switch": {
       "automation": {
         "default": "mdi:robot"
+      },
+      "circadian": {
+        "default": "mdi:sun-clock"
       }
     },
     "button": {

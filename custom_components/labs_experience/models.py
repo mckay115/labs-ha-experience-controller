@@ -9,12 +9,58 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 
 from .const import (
+    CLIMATE_INTENT_KEEP,
     COMMAND_SET_STATE,
     CONF_ACTIVE_STATES,
+    CONF_APPLIANCE_ENTITIES,
+    CONF_AUTO_LIGHTING,
+    CONF_CIRCADIAN,
+    CONF_CLIMATE_ENTITIES,
+    CONF_CLIMATE_INTENT,
+    CONF_COMFORT_TEMP,
     CONF_CONTROL_EVENT_DATA,
     CONF_CONTROL_EVENT_TYPE,
     CONF_CONTROL_KIND,
+    CONF_DAY_START,
+    CONF_DAYPARTS,
+    CONF_DOOR_SENSORS,
+    CONF_ECO_TEMP,
+    CONF_EVENING_START,
+    CONF_ILLUMINANCE_SENSOR,
+    CONF_LIGHT_BRIGHTNESS,
+    CONF_LIGHT_COLOR,
+    CONF_LIGHT_EXCLUSIVE,
+    CONF_LIGHT_ROLES,
+    CONF_LUX_THRESHOLD,
+    CONF_MANUAL_HOLD,
+    CONF_MAX_BRIGHTNESS,
+    CONF_MAX_KELVIN,
+    CONF_MEDIA_ENTITIES,
+    CONF_MIN_BRIGHTNESS,
+    CONF_MIN_KELVIN,
+    CONF_MORNING_START,
+    CONF_NIGHT_START,
+    CONF_VACANT_CLIMATE,
+    CONF_WINDOW_PAUSE_DELAY,
+    CONF_WINDOW_SENSORS,
     CONTROL_KIND_ENTITY,
+    DEFAULT_COMFORT_TEMP,
+    DEFAULT_DAY_START,
+    DEFAULT_ECO_TEMP,
+    DEFAULT_EVENING_START,
+    DEFAULT_LUX_THRESHOLD,
+    DEFAULT_MANUAL_HOLD,
+    DEFAULT_MAX_BRIGHTNESS,
+    DEFAULT_MAX_KELVIN,
+    DEFAULT_MIN_BRIGHTNESS,
+    DEFAULT_MIN_KELVIN,
+    DEFAULT_MORNING_START,
+    DEFAULT_NIGHT_START,
+    DEFAULT_TARGET_LUX,
+    DEFAULT_VACANT_CLIMATE,
+    DEFAULT_WINDOW_PAUSE_DELAY,
+    LIGHT_COLOR_CIRCADIAN,
+    LIGHT_ROLE_KEYS,
     CONF_AREA,
     CONF_CLEAR_DELAY,
     CONF_CONTROL_ACTIONS,
@@ -39,6 +85,7 @@ from .const import (
     CONF_STATE_ID,
     CONF_STATE_NAME,
     CONF_STATES,
+    CONF_TARGET_LUX,
     CONF_VACANT_ACTIONS,
     CONF_WAKE_ACTIONS,
     CONF_WAKE_DURATION,
@@ -61,6 +108,29 @@ def parse_active_states(raw: str | list[str]) -> frozenset[str]:
 
 
 @dataclass(slots=True)
+class LightingSpec:
+    """Declarative lighting for an experience state."""
+
+    roles: list[str]
+    brightness: int | None = None
+    color: str = LIGHT_COLOR_CIRCADIAN
+    exclusive: bool = True
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> LightingSpec | None:
+        roles = list(data.get(CONF_LIGHT_ROLES, []))
+        if not roles:
+            return None
+        brightness = data.get(CONF_LIGHT_BRIGHTNESS)
+        return cls(
+            roles=roles,
+            brightness=int(brightness) if brightness is not None else None,
+            color=data.get(CONF_LIGHT_COLOR, LIGHT_COLOR_CIRCADIAN),
+            exclusive=bool(data.get(CONF_LIGHT_EXCLUSIVE, True)),
+        )
+
+
+@dataclass(slots=True)
 class ExperienceState:
     """A user-defined experience state of a space."""
 
@@ -74,6 +144,9 @@ class ExperienceState:
     enter_actions: list[dict[str, Any]] = field(default_factory=list)
     exit_actions: list[dict[str, Any]] = field(default_factory=list)
     hold_occupancy: bool = False
+    dayparts: list[str] = field(default_factory=list)
+    lighting: LightingSpec | None = None
+    climate_intent: str = CLIMATE_INTENT_KEEP
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ExperienceState:
@@ -90,6 +163,9 @@ class ExperienceState:
             enter_actions=list(data.get(CONF_ENTER_ACTIONS, [])),
             exit_actions=list(data.get(CONF_EXIT_ACTIONS, [])),
             hold_occupancy=bool(data.get(CONF_HOLD_OCCUPANCY, False)),
+            dayparts=list(data.get(CONF_DAYPARTS, [])),
+            lighting=LightingSpec.from_dict(data),
+            climate_intent=data.get(CONF_CLIMATE_INTENT, CLIMATE_INTENT_KEEP),
         )
 
 
@@ -150,6 +226,34 @@ class SpaceConfig:
     pass_through_actions: list[dict[str, Any]]
     states: list[ExperienceState]
     controls: list[ControlBinding]
+    # Room profile
+    lights: dict[str, list[str]]
+    climate_entities: list[str]
+    window_sensors: list[str]
+    door_sensors: list[str]
+    media_entities: list[str]
+    appliance_entities: list[str]
+    illuminance_sensor: str | None
+    lux_threshold: float
+    target_lux: float
+    # Lighting facet
+    auto_lighting: bool
+    circadian_enabled: bool
+    min_kelvin: int
+    max_kelvin: int
+    min_brightness: int
+    max_brightness: int
+    manual_hold: int
+    # Climate facet
+    comfort_temp: float
+    eco_temp: float
+    vacant_climate: str
+    window_pause_delay: int
+    # Daypart boundaries ("HH:MM")
+    morning_start: str
+    day_start: str
+    evening_start: str
+    night_start: str
 
     @classmethod
     def from_entry(cls, entry: ConfigEntry) -> SpaceConfig:
@@ -175,7 +279,57 @@ class SpaceConfig:
             controls=[
                 ControlBinding.from_dict(c) for c in options.get(CONF_CONTROLS, [])
             ],
+            lights={
+                role: list(options.get(key, []))
+                for role, key in LIGHT_ROLE_KEYS.items()
+            },
+            climate_entities=list(options.get(CONF_CLIMATE_ENTITIES, [])),
+            window_sensors=list(options.get(CONF_WINDOW_SENSORS, [])),
+            door_sensors=list(options.get(CONF_DOOR_SENSORS, [])),
+            media_entities=list(options.get(CONF_MEDIA_ENTITIES, [])),
+            appliance_entities=list(options.get(CONF_APPLIANCE_ENTITIES, [])),
+            illuminance_sensor=options.get(CONF_ILLUMINANCE_SENSOR),
+            lux_threshold=float(
+                options.get(CONF_LUX_THRESHOLD, DEFAULT_LUX_THRESHOLD)
+            ),
+            target_lux=float(options.get(CONF_TARGET_LUX, DEFAULT_TARGET_LUX)),
+            auto_lighting=bool(options.get(CONF_AUTO_LIGHTING, True)),
+            circadian_enabled=bool(options.get(CONF_CIRCADIAN, True)),
+            min_kelvin=int(options.get(CONF_MIN_KELVIN, DEFAULT_MIN_KELVIN)),
+            max_kelvin=int(options.get(CONF_MAX_KELVIN, DEFAULT_MAX_KELVIN)),
+            min_brightness=int(
+                options.get(CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS)
+            ),
+            max_brightness=int(
+                options.get(CONF_MAX_BRIGHTNESS, DEFAULT_MAX_BRIGHTNESS)
+            ),
+            manual_hold=int(options.get(CONF_MANUAL_HOLD, DEFAULT_MANUAL_HOLD)),
+            comfort_temp=float(options.get(CONF_COMFORT_TEMP, DEFAULT_COMFORT_TEMP)),
+            eco_temp=float(options.get(CONF_ECO_TEMP, DEFAULT_ECO_TEMP)),
+            vacant_climate=options.get(CONF_VACANT_CLIMATE, DEFAULT_VACANT_CLIMATE),
+            window_pause_delay=int(
+                options.get(CONF_WINDOW_PAUSE_DELAY, DEFAULT_WINDOW_PAUSE_DELAY)
+            ),
+            morning_start=options.get(CONF_MORNING_START, DEFAULT_MORNING_START),
+            day_start=options.get(CONF_DAY_START, DEFAULT_DAY_START),
+            evening_start=options.get(CONF_EVENING_START, DEFAULT_EVENING_START),
+            night_start=options.get(CONF_NIGHT_START, DEFAULT_NIGHT_START),
         )
+
+    @property
+    def all_profile_lights(self) -> list[str]:
+        seen: dict[str, None] = {}
+        for entities in self.lights.values():
+            for entity_id in entities:
+                seen[entity_id] = None
+        return list(seen)
+
+    def role_lights(self, roles: list[str]) -> list[str]:
+        seen: dict[str, None] = {}
+        for role in roles:
+            for entity_id in self.lights.get(role, []):
+                seen[entity_id] = None
+        return list(seen)
 
     @property
     def has_baseline(self) -> bool:

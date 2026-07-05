@@ -31,6 +31,31 @@ timer races, restart adoption, override lifecycles) correctly once.
    create it; restarts adopt reality without replaying actions; manual
    overrides always win until you leave.
 
+## The layer model (v0.3)
+
+Each layer answers one question; they compose instead of fighting:
+
+| Layer | Question | Values |
+|---|---|---|
+| Occupancy | Is anyone here? | vacant / waking / occupied / cooldown |
+| Activity | What are they doing? | experience states |
+| Daypart | What time-of-body is it? | morning / day / evening / night |
+| Authority (per facet) | Who's in control? | auto / manual (lighting, climate) |
+
+The key rule: **device-level changes move the Authority layer, never the
+Activity layer.** Flipping a wall switch makes lighting `manual` (engine
+contexts distinguish our commands from human ones) while the room stays
+*Hanging out*. Vacancy always releases manual authority.
+
+**Room profile:** entities assigned to semantic roles (light roles
+ambient/task/accent/night, climate, windows, doors, media, appliances,
+illuminance) — auto-fillable from the HA area registries. The profile is
+what lets the engine offer habitat-science defaults with zero config:
+gentle night-light wake, circadian ambient baseline (sun-elevation-driven
+kelvin/brightness), lux gating, target-lux closed-loop brightness
+(deadband + rate-limited), cool-down fade, off at vacancy, per-state
+climate intents, and window-pause with restore.
+
 ## Concepts
 
 ### Space

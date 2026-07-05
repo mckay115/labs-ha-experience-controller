@@ -28,4 +28,4 @@ class LabsResumeAutomaticButton(LabsSpaceEntity, ButtonEntity):
         super().__init__(engine, "resume_automatic")
 
     async def async_press(self) -> None:
-        self._engine.async_set_override(None)
+        self._engine.async_resume_all()

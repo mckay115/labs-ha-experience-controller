@@ -20,7 +20,11 @@ async def async_setup_entry(
     entry: LabsExperienceConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    async_add_entities([LabsAutomationSwitch(entry.runtime_data)])
+    engine = entry.runtime_data
+    entities: list[LabsSpaceEntity] = [LabsAutomationSwitch(engine)]
+    if engine.config.all_profile_lights:
+        entities.append(LabsCircadianSwitch(engine))
+    async_add_entities(entities)
 
 
 class LabsAutomationSwitch(LabsSpaceEntity, SwitchEntity, RestoreEntity):
@@ -47,3 +51,31 @@ class LabsAutomationSwitch(LabsSpaceEntity, SwitchEntity, RestoreEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._engine.async_set_enabled(False)
+
+
+class LabsCircadianSwitch(LabsSpaceEntity, SwitchEntity, RestoreEntity):
+    """Enable or disable circadian color/brightness drift for the space."""
+
+    _attr_translation_key = "circadian"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, engine: SpaceEngine) -> None:
+        super().__init__(engine, "circadian")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state == STATE_OFF:
+            self._engine.lighting.circadian_enabled = False
+
+    @property
+    def is_on(self) -> bool:
+        return self._engine.lighting.circadian_enabled
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self._engine.lighting.circadian_enabled = True
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self._engine.lighting.circadian_enabled = False
+        self.async_write_ha_state()

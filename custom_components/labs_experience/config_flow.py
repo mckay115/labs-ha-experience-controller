@@ -15,14 +15,70 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_NAME
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import selector
 from homeassistant.util import slugify
 
 from .const import (
+    CLIMATE_INTENT_KEEP,
+    CLIMATE_INTENTS,
     COMMAND_SET_STATE,
     CONF_ACTIVE_STATES,
+    CONF_APPLIANCE_ENTITIES,
     CONF_AREA,
+    CONF_AUTO_LIGHTING,
+    CONF_CIRCADIAN,
     CONF_CLEAR_DELAY,
+    CONF_CLIMATE_ENTITIES,
+    CONF_CLIMATE_INTENT,
+    CONF_COMFORT_TEMP,
+    CONF_DAY_START,
+    CONF_DAYPARTS,
+    CONF_DOOR_SENSORS,
+    CONF_ECO_TEMP,
+    CONF_EVENING_START,
+    CONF_ILLUMINANCE_SENSOR,
+    CONF_LIGHT_BRIGHTNESS,
+    CONF_LIGHT_COLOR,
+    CONF_LIGHT_EXCLUSIVE,
+    CONF_LIGHT_ROLES,
+    CONF_LIGHTS_AMBIENT,
+    CONF_LIGHTS_ACCENT,
+    CONF_LIGHTS_NIGHT,
+    CONF_LIGHTS_TASK,
+    CONF_LUX_THRESHOLD,
+    CONF_MANUAL_HOLD,
+    CONF_MAX_BRIGHTNESS,
+    CONF_MAX_KELVIN,
+    CONF_MEDIA_ENTITIES,
+    CONF_MIN_BRIGHTNESS,
+    CONF_MIN_KELVIN,
+    CONF_MORNING_START,
+    CONF_NIGHT_START,
+    CONF_TARGET_LUX,
+    CONF_VACANT_CLIMATE,
+    CONF_WINDOW_PAUSE_DELAY,
+    CONF_WINDOW_SENSORS,
+    DEFAULT_COMFORT_TEMP,
+    DEFAULT_DAY_START,
+    DEFAULT_ECO_TEMP,
+    DEFAULT_EVENING_START,
+    DEFAULT_LUX_THRESHOLD,
+    DEFAULT_MANUAL_HOLD,
+    DEFAULT_MAX_BRIGHTNESS,
+    DEFAULT_MAX_KELVIN,
+    DEFAULT_MIN_BRIGHTNESS,
+    DEFAULT_MIN_KELVIN,
+    DEFAULT_MORNING_START,
+    DEFAULT_NIGHT_START,
+    DEFAULT_TARGET_LUX,
+    DEFAULT_VACANT_CLIMATE,
+    DEFAULT_WINDOW_PAUSE_DELAY,
+    LIGHT_COLOR_CIRCADIAN,
+    LIGHT_COLOR_MODES,
+    LIGHT_ROLES,
+    Daypart,
     CONF_CONTROL_ACTIONS,
     CONF_CONTROL_COMMAND,
     CONF_CONTROL_ENTITY,
@@ -148,6 +204,217 @@ def _normalize_basics(user_input: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+LIGHT_ROLE_CONF_KEYS = [
+    CONF_LIGHTS_AMBIENT,
+    CONF_LIGHTS_TASK,
+    CONF_LIGHTS_ACCENT,
+    CONF_LIGHTS_NIGHT,
+]
+
+PROFILE_LIST_KEYS = [
+    *LIGHT_ROLE_CONF_KEYS,
+    CONF_CLIMATE_ENTITIES,
+    CONF_WINDOW_SENSORS,
+    CONF_DOOR_SENSORS,
+    CONF_MEDIA_ENTITIES,
+    CONF_APPLIANCE_ENTITIES,
+]
+
+PROFILE_DOMAIN_FILTERS = {
+    CONF_LIGHTS_AMBIENT: ["light"],
+    CONF_LIGHTS_TASK: ["light"],
+    CONF_LIGHTS_ACCENT: ["light"],
+    CONF_LIGHTS_NIGHT: ["light"],
+    CONF_CLIMATE_ENTITIES: ["climate"],
+    CONF_WINDOW_SENSORS: ["binary_sensor"],
+    CONF_DOOR_SENSORS: ["binary_sensor"],
+    CONF_MEDIA_ENTITIES: ["media_player"],
+    CONF_APPLIANCE_ENTITIES: ["switch", "binary_sensor", "sensor", "fan", "vacuum"],
+}
+
+
+def _profile_schema(defaults: dict[str, Any]) -> vol.Schema:
+    schema: dict[Any, Any] = {}
+    for key in PROFILE_LIST_KEYS:
+        schema[vol.Optional(key, default=list(defaults.get(key, [])))] = selector(
+            {
+                "entity": {
+                    "multiple": True,
+                    "filter": [{"domain": PROFILE_DOMAIN_FILTERS[key]}],
+                }
+            }
+        )
+    schema[
+        vol.Optional(
+            CONF_ILLUMINANCE_SENSOR,
+            description={"suggested_value": defaults.get(CONF_ILLUMINANCE_SENSOR)},
+        )
+    ] = selector(
+        {"entity": {"filter": [{"domain": ["sensor"], "device_class": ["illuminance"]}]}}
+    )
+    schema[
+        vol.Required(
+            CONF_LUX_THRESHOLD,
+            default=float(defaults.get(CONF_LUX_THRESHOLD, DEFAULT_LUX_THRESHOLD)),
+        )
+    ] = selector(
+        {"number": {"min": 0, "max": 10000, "step": 1, "unit_of_measurement": "lx", "mode": "box"}}
+    )
+    schema[
+        vol.Required(
+            CONF_TARGET_LUX,
+            default=float(defaults.get(CONF_TARGET_LUX, DEFAULT_TARGET_LUX)),
+        )
+    ] = selector(
+        {"number": {"min": 0, "max": 2000, "step": 10, "unit_of_measurement": "lx", "mode": "box"}}
+    )
+    return vol.Schema(schema)
+
+
+def _lighting_schema(defaults: dict[str, Any]) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_AUTO_LIGHTING,
+                default=bool(defaults.get(CONF_AUTO_LIGHTING, True)),
+            ): selector({"boolean": {}}),
+            vol.Required(
+                CONF_CIRCADIAN, default=bool(defaults.get(CONF_CIRCADIAN, True))
+            ): selector({"boolean": {}}),
+            vol.Required(
+                CONF_MIN_KELVIN,
+                default=int(defaults.get(CONF_MIN_KELVIN, DEFAULT_MIN_KELVIN)),
+            ): selector(
+                {"number": {"min": 1000, "max": 10000, "step": 50, "unit_of_measurement": "K", "mode": "box"}}
+            ),
+            vol.Required(
+                CONF_MAX_KELVIN,
+                default=int(defaults.get(CONF_MAX_KELVIN, DEFAULT_MAX_KELVIN)),
+            ): selector(
+                {"number": {"min": 1000, "max": 10000, "step": 50, "unit_of_measurement": "K", "mode": "box"}}
+            ),
+            vol.Required(
+                CONF_MIN_BRIGHTNESS,
+                default=int(defaults.get(CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS)),
+            ): selector(
+                {"number": {"min": 1, "max": 100, "unit_of_measurement": "%", "mode": "box"}}
+            ),
+            vol.Required(
+                CONF_MAX_BRIGHTNESS,
+                default=int(defaults.get(CONF_MAX_BRIGHTNESS, DEFAULT_MAX_BRIGHTNESS)),
+            ): selector(
+                {"number": {"min": 1, "max": 100, "unit_of_measurement": "%", "mode": "box"}}
+            ),
+            vol.Required(
+                CONF_MANUAL_HOLD,
+                default=int(defaults.get(CONF_MANUAL_HOLD, DEFAULT_MANUAL_HOLD)),
+            ): selector(
+                {"number": {"min": 0, "max": 720, "unit_of_measurement": "min", "mode": "box"}}
+            ),
+            vol.Required(
+                CONF_MORNING_START,
+                default=defaults.get(CONF_MORNING_START, DEFAULT_MORNING_START),
+            ): selector({"time": {}}),
+            vol.Required(
+                CONF_DAY_START,
+                default=defaults.get(CONF_DAY_START, DEFAULT_DAY_START),
+            ): selector({"time": {}}),
+            vol.Required(
+                CONF_EVENING_START,
+                default=defaults.get(CONF_EVENING_START, DEFAULT_EVENING_START),
+            ): selector({"time": {}}),
+            vol.Required(
+                CONF_NIGHT_START,
+                default=defaults.get(CONF_NIGHT_START, DEFAULT_NIGHT_START),
+            ): selector({"time": {}}),
+        }
+    )
+
+
+def _climate_schema(defaults: dict[str, Any]) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_COMFORT_TEMP,
+                default=float(defaults.get(CONF_COMFORT_TEMP, DEFAULT_COMFORT_TEMP)),
+            ): selector(
+                {"number": {"min": 5, "max": 35, "step": 0.5, "unit_of_measurement": "°", "mode": "box"}}
+            ),
+            vol.Required(
+                CONF_ECO_TEMP,
+                default=float(defaults.get(CONF_ECO_TEMP, DEFAULT_ECO_TEMP)),
+            ): selector(
+                {"number": {"min": 5, "max": 35, "step": 0.5, "unit_of_measurement": "°", "mode": "box"}}
+            ),
+            vol.Required(
+                CONF_VACANT_CLIMATE,
+                default=defaults.get(CONF_VACANT_CLIMATE, DEFAULT_VACANT_CLIMATE),
+            ): selector(
+                {"select": {"options": list(CLIMATE_INTENTS), "translation_key": "climate_intent"}}
+            ),
+            vol.Required(
+                CONF_WINDOW_PAUSE_DELAY,
+                default=int(
+                    defaults.get(CONF_WINDOW_PAUSE_DELAY, DEFAULT_WINDOW_PAUSE_DELAY)
+                ),
+            ): selector(
+                {"number": {"min": 0, "max": 3600, "unit_of_measurement": "s", "mode": "box"}}
+            ),
+        }
+    )
+
+
+def _classify_area(hass: HomeAssistant, area_id: str) -> dict[str, Any]:
+    """Build profile assignments from an area's entities."""
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    entries = {
+        entry.entity_id: entry
+        for entry in er.async_entries_for_area(ent_reg, area_id)
+    }
+    for device in dr.async_entries_for_area(dev_reg, area_id):
+        for entry in er.async_entries_for_device(ent_reg, device.id):
+            if entry.area_id is None:
+                entries.setdefault(entry.entity_id, entry)
+
+    filled: dict[str, list[str]] = {
+        CONF_PRESENCE_ENTITIES: [],
+        CONF_LIGHTS_AMBIENT: [],
+        CONF_CLIMATE_ENTITIES: [],
+        CONF_MEDIA_ENTITIES: [],
+        CONF_WINDOW_SENSORS: [],
+        CONF_DOOR_SENSORS: [],
+    }
+    illuminance: str | None = None
+    for entity_id, entry in sorted(entries.items()):
+        if entry.disabled_by or entry.hidden_by or entry.entity_category:
+            continue
+        domain = entity_id.split(".", 1)[0]
+        state = hass.states.get(entity_id)
+        device_class = (state and state.attributes.get("device_class")) or (
+            entry.device_class or entry.original_device_class
+        )
+        if domain == "light":
+            filled[CONF_LIGHTS_AMBIENT].append(entity_id)
+        elif domain == "climate":
+            filled[CONF_CLIMATE_ENTITIES].append(entity_id)
+        elif domain == "media_player":
+            filled[CONF_MEDIA_ENTITIES].append(entity_id)
+        elif domain == "binary_sensor":
+            if device_class in ("motion", "occupancy", "presence"):
+                filled[CONF_PRESENCE_ENTITIES].append(entity_id)
+            elif device_class == "window":
+                filled[CONF_WINDOW_SENSORS].append(entity_id)
+            elif device_class in ("door", "garage_door", "opening"):
+                filled[CONF_DOOR_SENSORS].append(entity_id)
+        elif domain == "sensor" and device_class == "illuminance":
+            illuminance = illuminance or entity_id
+    result: dict[str, Any] = {key: value for key, value in filled.items() if value}
+    if illuminance:
+        result[CONF_ILLUMINANCE_SENSOR] = illuminance
+    return result
+
+
 def _state_schema(defaults: dict[str, Any]) -> vol.Schema:
     return vol.Schema(
         {
@@ -185,6 +452,60 @@ def _state_schema(defaults: dict[str, Any]) -> vol.Schema:
                 default=bool(defaults.get(CONF_HOLD_OCCUPANCY, False)),
             ): selector({"boolean": {}}),
             vol.Optional(
+                CONF_DAYPARTS, default=list(defaults.get(CONF_DAYPARTS, []))
+            ): selector(
+                {
+                    "select": {
+                        "options": [daypart.value for daypart in Daypart],
+                        "multiple": True,
+                        "translation_key": "dayparts",
+                    }
+                }
+            ),
+            vol.Optional(
+                CONF_LIGHT_ROLES, default=list(defaults.get(CONF_LIGHT_ROLES, []))
+            ): selector(
+                {
+                    "select": {
+                        "options": list(LIGHT_ROLES),
+                        "multiple": True,
+                        "translation_key": "light_roles",
+                    }
+                }
+            ),
+            vol.Optional(
+                CONF_LIGHT_BRIGHTNESS,
+                description={"suggested_value": defaults.get(CONF_LIGHT_BRIGHTNESS)},
+            ): selector(
+                {"number": {"min": 1, "max": 100, "unit_of_measurement": "%", "mode": "box"}}
+            ),
+            vol.Required(
+                CONF_LIGHT_COLOR,
+                default=defaults.get(CONF_LIGHT_COLOR, LIGHT_COLOR_CIRCADIAN),
+            ): selector(
+                {
+                    "select": {
+                        "options": list(LIGHT_COLOR_MODES),
+                        "translation_key": "light_color",
+                    }
+                }
+            ),
+            vol.Required(
+                CONF_LIGHT_EXCLUSIVE,
+                default=bool(defaults.get(CONF_LIGHT_EXCLUSIVE, True)),
+            ): selector({"boolean": {}}),
+            vol.Required(
+                CONF_CLIMATE_INTENT,
+                default=defaults.get(CONF_CLIMATE_INTENT, CLIMATE_INTENT_KEEP),
+            ): selector(
+                {
+                    "select": {
+                        "options": list(CLIMATE_INTENTS),
+                        "translation_key": "climate_intent",
+                    }
+                }
+            ),
+            vol.Optional(
                 CONF_ENTER_ACTIONS,
                 description={"suggested_value": defaults.get(CONF_ENTER_ACTIONS)},
             ): selector({"action": {}}),
@@ -206,6 +527,14 @@ def _state_from_input(user_input: dict[str, Any], state_id: str) -> dict[str, An
         CONF_EVIDENCE_MODE: user_input.get(CONF_EVIDENCE_MODE, EVIDENCE_MODE_ANY),
         CONF_ACTIVE_STATES: user_input.get(CONF_ACTIVE_STATES, DEFAULT_ACTIVE_STATES),
         CONF_HOLD_OCCUPANCY: bool(user_input.get(CONF_HOLD_OCCUPANCY, False)),
+        CONF_DAYPARTS: list(user_input.get(CONF_DAYPARTS, [])),
+        CONF_LIGHT_ROLES: list(user_input.get(CONF_LIGHT_ROLES, [])),
+        CONF_LIGHT_BRIGHTNESS: int(brightness)
+        if (brightness := user_input.get(CONF_LIGHT_BRIGHTNESS)) is not None
+        else None,
+        CONF_LIGHT_COLOR: user_input.get(CONF_LIGHT_COLOR, LIGHT_COLOR_CIRCADIAN),
+        CONF_LIGHT_EXCLUSIVE: bool(user_input.get(CONF_LIGHT_EXCLUSIVE, True)),
+        CONF_CLIMATE_INTENT: user_input.get(CONF_CLIMATE_INTENT, CLIMATE_INTENT_KEEP),
         CONF_ENTER_ACTIONS: user_input.get(CONF_ENTER_ACTIONS) or [],
         CONF_EXIT_ACTIONS: user_input.get(CONF_EXIT_ACTIONS) or [],
     }
@@ -475,19 +804,31 @@ class LabsExperienceConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
         if user_input is not None:
             name = user_input[CONF_NAME].strip()
             self._async_abort_entries_match({CONF_NAME: name})
             options = _normalize_basics(
                 {key: value for key, value in user_input.items() if key != CONF_NAME}
             )
-            return self.async_create_entry(
-                title=name, data={CONF_NAME: name}, options=options
-            )
+            options.setdefault(CONF_PRESENCE_ENTITIES, [])
+            area_id = options.get(CONF_AREA)
+            if area_id:
+                # Build the room profile from the area automatically;
+                # explicit choices in the form always win.
+                for key, value in _classify_area(self.hass, area_id).items():
+                    if not options.get(key):
+                        options[key] = value
+            if not options.get(CONF_PRESENCE_ENTITIES):
+                errors[CONF_PRESENCE_ENTITIES] = "presence_required"
+            else:
+                return self.async_create_entry(
+                    title=name, data={CONF_NAME: name}, options=options
+                )
         schema = vol.Schema(
             {vol.Required(CONF_NAME): selector({"text": {}})}
-        ).extend(_basics_schema({}).schema)
-        return self.async_show_form(step_id="user", data_schema=schema)
+        ).extend(_basics_schema(user_input or {}).schema)
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
     @staticmethod
     @callback
@@ -520,13 +861,78 @@ class LabsExperienceOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        menu = ["basics", "phase_actions", "add_state"]
+        menu = ["basics", "profile"]
+        if self._options.get(CONF_AREA):
+            menu.append("fill_from_area")
+        menu += ["lighting_settings", "climate_settings", "phase_actions", "add_state"]
         if self._states():
             menu += ["edit_state", "remove_states"]
         menu += ["discover_control", "add_control"]
         if self._controls():
             menu += ["edit_control", "remove_controls"]
         return self.async_show_menu(step_id="init", menu_options=menu)
+
+    async def async_step_profile(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            options = self._options
+            for key in PROFILE_LIST_KEYS:
+                options[key] = list(user_input.get(key, []))
+            if user_input.get(CONF_ILLUMINANCE_SENSOR):
+                options[CONF_ILLUMINANCE_SENSOR] = user_input[CONF_ILLUMINANCE_SENSOR]
+            else:
+                options.pop(CONF_ILLUMINANCE_SENSOR, None)
+            options[CONF_LUX_THRESHOLD] = float(user_input[CONF_LUX_THRESHOLD])
+            options[CONF_TARGET_LUX] = float(user_input[CONF_TARGET_LUX])
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="profile", data_schema=_profile_schema(self._options)
+        )
+
+    async def async_step_fill_from_area(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        options = self._options
+        area_id = options.get(CONF_AREA)
+        if not area_id:
+            return self.async_abort(reason="no_area")
+        # Fill only roles that are still empty; never clobber choices.
+        for key, value in _classify_area(self.hass, area_id).items():
+            if not options.get(key):
+                options[key] = value
+        return self.async_create_entry(title="", data=options)
+
+    async def async_step_lighting_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            options = self._options
+            options.update(user_input)
+            for key in (
+                CONF_MIN_KELVIN,
+                CONF_MAX_KELVIN,
+                CONF_MIN_BRIGHTNESS,
+                CONF_MAX_BRIGHTNESS,
+                CONF_MANUAL_HOLD,
+            ):
+                options[key] = int(options[key])
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="lighting_settings", data_schema=_lighting_schema(self._options)
+        )
+
+    async def async_step_climate_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            options = self._options
+            options.update(user_input)
+            options[CONF_WINDOW_PAUSE_DELAY] = int(options[CONF_WINDOW_PAUSE_DELAY])
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="climate_settings", data_schema=_climate_schema(self._options)
+        )
 
     async def async_step_basics(
         self, user_input: dict[str, Any] | None = None

@@ -35,6 +35,98 @@ CONF_ACTIVE_STATES = "active_states"
 CONF_ENTER_ACTIONS = "enter_actions"
 CONF_EXIT_ACTIONS = "exit_actions"
 CONF_HOLD_OCCUPANCY = "hold_occupancy"
+CONF_DAYPARTS = "dayparts"
+
+# Room profile roles
+CONF_LIGHTS_AMBIENT = "lights_ambient"
+CONF_LIGHTS_TASK = "lights_task"
+CONF_LIGHTS_ACCENT = "lights_accent"
+CONF_LIGHTS_NIGHT = "lights_night"
+LIGHT_ROLE_AMBIENT = "ambient"
+LIGHT_ROLE_TASK = "task"
+LIGHT_ROLE_ACCENT = "accent"
+LIGHT_ROLE_NIGHT = "night"
+LIGHT_ROLES = [
+    LIGHT_ROLE_AMBIENT,
+    LIGHT_ROLE_TASK,
+    LIGHT_ROLE_ACCENT,
+    LIGHT_ROLE_NIGHT,
+]
+LIGHT_ROLE_KEYS = {
+    LIGHT_ROLE_AMBIENT: CONF_LIGHTS_AMBIENT,
+    LIGHT_ROLE_TASK: CONF_LIGHTS_TASK,
+    LIGHT_ROLE_ACCENT: CONF_LIGHTS_ACCENT,
+    LIGHT_ROLE_NIGHT: CONF_LIGHTS_NIGHT,
+}
+CONF_CLIMATE_ENTITIES = "climate_entities"
+CONF_WINDOW_SENSORS = "window_sensors"
+CONF_DOOR_SENSORS = "door_sensors"
+CONF_MEDIA_ENTITIES = "media_entities"
+CONF_APPLIANCE_ENTITIES = "appliance_entities"
+CONF_ILLUMINANCE_SENSOR = "illuminance_sensor"
+CONF_LUX_THRESHOLD = "lux_threshold"
+CONF_TARGET_LUX = "target_lux"
+DEFAULT_LUX_THRESHOLD = 50
+DEFAULT_TARGET_LUX = 0  # 0 = lux-compensated brightness disabled
+
+# Closed-loop lux compensation tuning
+LUX_DEADBAND = 0.15  # fraction of target inside which we leave lights alone
+LUX_MAX_STEP = 20  # largest single brightness adjustment, percent
+LUX_ADJUST_INTERVAL = 60  # seconds between adjustments (anti-oscillation)
+
+# Lighting facet
+CONF_AUTO_LIGHTING = "auto_lighting"
+CONF_CIRCADIAN = "circadian_enabled"
+CONF_MIN_KELVIN = "min_kelvin"
+CONF_MAX_KELVIN = "max_kelvin"
+CONF_MIN_BRIGHTNESS = "min_brightness"
+CONF_MAX_BRIGHTNESS = "max_brightness"
+CONF_MANUAL_HOLD = "manual_hold"
+DEFAULT_MIN_KELVIN = 2200
+DEFAULT_MAX_KELVIN = 5500
+DEFAULT_MIN_BRIGHTNESS = 35
+DEFAULT_MAX_BRIGHTNESS = 100
+DEFAULT_MANUAL_HOLD = 0  # minutes; 0 = manual holds until the space is vacant
+
+# Per-state lighting spec
+CONF_LIGHT_ROLES = "light_roles"
+CONF_LIGHT_BRIGHTNESS = "light_brightness"
+CONF_LIGHT_COLOR = "light_color"
+CONF_LIGHT_EXCLUSIVE = "light_exclusive"
+LIGHT_COLOR_CIRCADIAN = "circadian"
+LIGHT_COLOR_MODES = [LIGHT_COLOR_CIRCADIAN, "warm", "neutral", "cool"]
+COLOR_KELVIN = {"warm": 2700, "neutral": 4000, "cool": 5500}
+
+# Climate facet
+CONF_CLIMATE_INTENT = "climate_intent"
+CLIMATE_INTENT_KEEP = "keep"
+CLIMATE_INTENT_COMFORT = "comfort"
+CLIMATE_INTENT_ECO = "eco"
+CLIMATE_INTENT_OFF = "off"
+CLIMATE_INTENTS = [
+    CLIMATE_INTENT_KEEP,
+    CLIMATE_INTENT_COMFORT,
+    CLIMATE_INTENT_ECO,
+    CLIMATE_INTENT_OFF,
+]
+CONF_COMFORT_TEMP = "comfort_temp"
+CONF_ECO_TEMP = "eco_temp"
+CONF_VACANT_CLIMATE = "vacant_climate"
+CONF_WINDOW_PAUSE_DELAY = "window_pause_delay"
+DEFAULT_COMFORT_TEMP = 21.0
+DEFAULT_ECO_TEMP = 17.0
+DEFAULT_VACANT_CLIMATE = CLIMATE_INTENT_KEEP
+DEFAULT_WINDOW_PAUSE_DELAY = 120
+
+# Daypart boundaries ("HH:MM" local time; night wraps midnight)
+CONF_MORNING_START = "morning_start"
+CONF_DAY_START = "day_start"
+CONF_EVENING_START = "evening_start"
+CONF_NIGHT_START = "night_start"
+DEFAULT_MORNING_START = "06:00"
+DEFAULT_DAY_START = "10:00"
+DEFAULT_EVENING_START = "18:00"
+DEFAULT_NIGHT_START = "22:00"
 
 CONF_CONTROL_ENTITY = "entity_id"
 CONF_CONTROL_TRIGGER = "trigger"
@@ -76,6 +168,10 @@ COMMAND_WAKE = "wake"
 COMMAND_MAKE_VACANT = "make_vacant"
 COMMAND_TOGGLE_AUTOMATION = "toggle_automation"
 COMMAND_RUN_ACTIONS = "run_actions"
+COMMAND_LIGHTS_ON = "lights_on"
+COMMAND_LIGHTS_OFF = "lights_off"
+COMMAND_BRIGHTEN = "brighten"
+COMMAND_DIM = "dim"
 
 CONTROL_COMMANDS = [
     COMMAND_SET_STATE,
@@ -85,6 +181,10 @@ CONTROL_COMMANDS = [
     COMMAND_MAKE_VACANT,
     COMMAND_TOGGLE_AUTOMATION,
     COMMAND_RUN_ACTIONS,
+    COMMAND_LIGHTS_ON,
+    COMMAND_LIGHTS_OFF,
+    COMMAND_BRIGHTEN,
+    COMMAND_DIM,
 ]
 
 DEFAULT_WAKE_DURATION = 20
@@ -121,3 +221,19 @@ class Phase(StrEnum):
     WAKING = "waking"
     OCCUPIED = "occupied"
     COOLDOWN = "cooldown"
+
+
+class Daypart(StrEnum):
+    """The time-of-body layer used by circadian defaults and state gating."""
+
+    MORNING = "morning"
+    DAY = "day"
+    EVENING = "evening"
+    NIGHT = "night"
+
+
+class Authority(StrEnum):
+    """Who currently controls a facet of the space."""
+
+    AUTO = "auto"
+    MANUAL = "manual"
