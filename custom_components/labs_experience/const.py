@@ -41,6 +41,28 @@ CONF_CONTROL_TRIGGER = "trigger"
 CONF_CONTROL_COMMAND = "command"
 CONF_CONTROL_STATE = "state_id"
 CONF_CONTROL_ACTIONS = "actions"
+CONF_CONTROL_KIND = "kind"
+CONF_CONTROL_EVENT_TYPE = "event_type"
+CONF_CONTROL_EVENT_DATA = "event_data"
+
+CONTROL_KIND_ENTITY = "entity"
+CONTROL_KIND_BUS = "bus_event"
+
+# Bus event types fired by button remotes that never become entities.
+# Used both for engine dispatch and press-to-program discovery.
+CONTROLLER_EVENT_TYPES = [
+    "zha_event",
+    "deconz_event",
+    "hue_event",
+    "lutron_caseta_button_event",
+    "zwave_js_value_notification",
+    "zwave_js_notification",
+    "knx_event",
+    "shelly.click",
+    "tasmota_event",
+]
+
+CONTROL_CAPTURE_TIMEOUT = 30
 
 EVIDENCE_MODE_ANY = "any"
 EVIDENCE_MODE_ALL = "all"

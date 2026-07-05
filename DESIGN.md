@@ -101,10 +101,13 @@ service and controls also wake a vacant space — walking in and hitting
 
 ### Controls
 
-Switch-Manager-style bindings, but space-aware. Each binding: an entity
-(modern `event` entities from Zigbee/Z-Wave remotes, or plain
-switch/sensor/button entities), a trigger (`single`, `double`, `on`,
-`any`, …), and a command:
+Switch-Manager-style bindings, but space-aware. Two binding kinds:
+**entity** (modern `event` entities from remotes, or plain
+switch/sensor/button entities, with a trigger like `single`, `double`,
+`on`, `any`) and **bus event** (raw `zha_event` / `deconz_event` /
+`hue_event` / Lutron / Z-Wave notification events from remotes that never
+become entities, matched on a captured data subset). Both map to a
+command:
 
 `set_state` · `cycle_states` · `resume_automatic` · `wake` ·
 `make_vacant` · `toggle_automation` · `run_actions` (custom sequence)
@@ -113,6 +116,13 @@ Semantics: commands respect the space (cycling from vacant wakes into the
 first state; `wake` without presence behaves like a pass-through if nobody
 arrives). `toggle_automation` works even while paused so a button can
 always un-pause its room.
+
+**Press-to-program:** the options flow's *Add a control by pressing it*
+listens (30 s) for the next press — watching every `event` entity and the
+known controller bus event types — then prefills the binding with exactly
+what fired; the user only picks the command. Bus captures keep the scalar
+event-data keys as the match signature, so the same button and press type
+match while transient payload fields are ignored.
 
 ### Events & services
 

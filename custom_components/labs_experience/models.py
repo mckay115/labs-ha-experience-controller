@@ -11,6 +11,10 @@ from homeassistant.const import CONF_NAME
 from .const import (
     COMMAND_SET_STATE,
     CONF_ACTIVE_STATES,
+    CONF_CONTROL_EVENT_DATA,
+    CONF_CONTROL_EVENT_TYPE,
+    CONF_CONTROL_KIND,
+    CONTROL_KIND_ENTITY,
     CONF_AREA,
     CONF_CLEAR_DELAY,
     CONF_CONTROL_ACTIONS,
@@ -91,11 +95,19 @@ class ExperienceState:
 
 @dataclass(slots=True)
 class ControlBinding:
-    """A physical control (button, switch, remote) bound to a space command."""
+    """A physical control (button, switch, remote) bound to a space command.
+
+    Two kinds: `entity` bindings watch an entity's state/event-type,
+    `bus_event` bindings match raw bus events (zha_event, hue_event, ...)
+    fired by remotes that never become entities.
+    """
 
     id: str
-    entity_id: str
+    kind: str = CONTROL_KIND_ENTITY
+    entity_id: str | None = None
     trigger: str = TRIGGER_ANY
+    event_type: str | None = None
+    event_data: dict[str, Any] = field(default_factory=dict)
     command: str = COMMAND_SET_STATE
     state_id: str | None = None
     actions: list[dict[str, Any]] = field(default_factory=list)
@@ -104,8 +116,11 @@ class ControlBinding:
     def from_dict(cls, data: dict[str, Any]) -> ControlBinding:
         return cls(
             id=data[CONF_STATE_ID],
-            entity_id=data[CONF_CONTROL_ENTITY],
+            kind=data.get(CONF_CONTROL_KIND, CONTROL_KIND_ENTITY),
+            entity_id=data.get(CONF_CONTROL_ENTITY),
             trigger=data.get(CONF_CONTROL_TRIGGER, TRIGGER_ANY),
+            event_type=data.get(CONF_CONTROL_EVENT_TYPE),
+            event_data=dict(data.get(CONF_CONTROL_EVENT_DATA, {})),
             command=data.get(CONF_CONTROL_COMMAND, COMMAND_SET_STATE),
             state_id=data.get(CONF_CONTROL_STATE),
             actions=list(data.get(CONF_CONTROL_ACTIONS, [])),

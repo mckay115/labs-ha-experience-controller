@@ -38,7 +38,8 @@
           "add_state": "Add an experience state",
           "edit_state": "Edit an experience state",
           "remove_states": "Remove experience states",
-          "add_control": "Add a control (button, switch, remote)",
+          "discover_control": "Add a control by pressing it",
+          "add_control": "Add a control manually (button, switch, remote)",
           "edit_control": "Edit a control",
           "remove_controls": "Remove controls"
         }
@@ -176,14 +177,33 @@
         "data": {
           "controls": "Controls to remove"
         }
+      },
+      "discover_control_form": {
+        "title": "Control detected",
+        "description": "Captured: `{captured}`\n\nPick what this press should do.",
+        "data": {
+          "trigger": "Trigger",
+          "command": "Command",
+          "state_id": "Experience state",
+          "actions": "Custom actions"
+        },
+        "data_description": {
+          "trigger": "The captured press type. Use \"any\" to react to every press of this control.",
+          "state_id": "Required for the Set state command.",
+          "actions": "Used by the Run custom actions command."
+        }
       }
+    },
+    "progress": {
+      "press_control": "Press the button or control you want to bind now — the first press detected will be mapped."
     },
     "error": {
       "state_required": "Pick an experience state for the Set state command."
     },
     "abort": {
       "state_not_found": "That state no longer exists.",
-      "control_not_found": "That control no longer exists."
+      "control_not_found": "That control no longer exists.",
+      "no_press_detected": "No press was detected within 30 seconds. Open the menu and try again."
     }
   },
   "selector": {

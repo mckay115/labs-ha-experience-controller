@@ -30,6 +30,8 @@ from .const import (
     COMMAND_SET_STATE,
     COMMAND_TOGGLE_AUTOMATION,
     COMMAND_WAKE,
+    CONTROL_KIND_BUS,
+    CONTROL_KIND_ENTITY,
     DOMAIN,
     EVENT_PASSING_THROUGH,
     EVENT_PHASE_CHANGED,
@@ -85,6 +87,7 @@ class SpaceEngine:
         self.enabled = True
         self._listeners: list[CALLBACK_TYPE] = []
         self._unsub_track: CALLBACK_TYPE | None = None
+        self._bus_unsubs: list[CALLBACK_TYPE] = []
         self._wake_cancel: CALLBACK_TYPE | None = None
         self._clear_cancel: CALLBACK_TYPE | None = None
         self._cooldown_cancel: CALLBACK_TYPE | None = None
@@ -102,10 +105,20 @@ class SpaceEngine:
         for state in self.config.states:
             tracked.update(state.evidence_entities)
         for control in self.config.controls:
-            tracked.add(control.entity_id)
+            if control.kind == CONTROL_KIND_ENTITY and control.entity_id:
+                tracked.add(control.entity_id)
         if tracked:
             self._unsub_track = async_track_state_change_event(
                 self.hass, sorted(tracked), self._handle_entity_event
+            )
+        bus_event_types = {
+            control.event_type
+            for control in self.config.controls
+            if control.kind == CONTROL_KIND_BUS and control.event_type
+        }
+        for event_type in sorted(bus_event_types):
+            self._bus_unsubs.append(
+                self.hass.bus.async_listen(event_type, self._handle_bus_control_event)
             )
         if self.presence_active:
             self.phase = Phase.OCCUPIED
@@ -118,6 +131,8 @@ class SpaceEngine:
         if self._unsub_track:
             self._unsub_track()
             self._unsub_track = None
+        while self._bus_unsubs:
+            self._bus_unsubs.pop()()
         self._cancel_all_timers()
 
     @callback
@@ -442,8 +457,23 @@ class SpaceEngine:
         if new_state is None:
             return
         for control in self.config.controls:
-            if control.entity_id == entity_id and self._control_triggered(
-                control, old_state, new_state
+            if (
+                control.kind == CONTROL_KIND_ENTITY
+                and control.entity_id == entity_id
+                and self._control_triggered(control, old_state, new_state)
+            ):
+                self._execute_control(control)
+
+    @callback
+    def _handle_bus_control_event(self, event: Event) -> None:
+        for control in self.config.controls:
+            if (
+                control.kind == CONTROL_KIND_BUS
+                and control.event_type == event.event_type
+                and all(
+                    event.data.get(key) == value
+                    for key, value in control.event_data.items()
+                )
             ):
                 self._execute_control(control)
 

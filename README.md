@@ -41,10 +41,14 @@ anytime. States with **hold occupancy** keep the room alive while their
 evidence is active — no more lights-off in the middle of a movie because
 you sat still.
 
-**Controls**: bind physical buttons, remotes, and switches (modern `event`
-entities included) to space commands — set a state, cycle states, wake,
-sleep, resume automatic, or run custom actions. Like Switch Manager, but
-space-aware.
+**Controls**: bind physical buttons, remotes, and switches to space
+commands — set a state, cycle states, wake, sleep, resume automatic, or
+run custom actions. Like Switch Manager, but space-aware. The easiest way
+to add one is **press-to-program**: choose *Add a control by pressing it*,
+press the physical button, and the exact button + press type is captured
+and mapped — works with modern `event` entities *and* raw bus events
+(`zha_event`, `deconz_event`, `hue_event`, Lutron, Z-Wave scene
+notifications, and more) from remotes that never become entities.
 
 ## Modern sensors welcome
 

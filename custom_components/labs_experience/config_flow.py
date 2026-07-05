@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import voluptuous as vol
@@ -13,7 +14,7 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.const import CONF_NAME
-from homeassistant.core import callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.selector import selector
 from homeassistant.util import slugify
 
@@ -25,9 +26,16 @@ from .const import (
     CONF_CONTROL_ACTIONS,
     CONF_CONTROL_COMMAND,
     CONF_CONTROL_ENTITY,
+    CONF_CONTROL_EVENT_DATA,
+    CONF_CONTROL_EVENT_TYPE,
+    CONF_CONTROL_KIND,
     CONF_CONTROL_STATE,
     CONF_CONTROL_TRIGGER,
     CONF_CONTROLS,
+    CONTROL_CAPTURE_TIMEOUT,
+    CONTROL_KIND_BUS,
+    CONTROL_KIND_ENTITY,
+    CONTROLLER_EVENT_TYPES,
     CONF_COOLDOWN_ACTIONS,
     CONF_COOLDOWN_DURATION,
     CONF_ENTER_ACTIONS,
@@ -255,17 +263,208 @@ def _control_schema(
     return vol.Schema(schema)
 
 
-def _control_from_input(user_input: dict[str, Any], control_id: str) -> dict[str, Any]:
+def _command_fields_from_input(user_input: dict[str, Any]) -> dict[str, Any]:
     return {
-        CONF_STATE_ID: control_id,
-        CONF_CONTROL_ENTITY: user_input[CONF_CONTROL_ENTITY],
-        CONF_CONTROL_TRIGGER: (
-            user_input.get(CONF_CONTROL_TRIGGER) or TRIGGER_ANY
-        ).strip(),
         CONF_CONTROL_COMMAND: user_input.get(CONF_CONTROL_COMMAND, COMMAND_SET_STATE),
         CONF_CONTROL_STATE: user_input.get(CONF_CONTROL_STATE),
         CONF_CONTROL_ACTIONS: user_input.get(CONF_CONTROL_ACTIONS) or [],
     }
+
+
+def _control_from_input(user_input: dict[str, Any], control_id: str) -> dict[str, Any]:
+    return {
+        CONF_STATE_ID: control_id,
+        CONF_CONTROL_KIND: CONTROL_KIND_ENTITY,
+        CONF_CONTROL_ENTITY: user_input[CONF_CONTROL_ENTITY],
+        CONF_CONTROL_TRIGGER: (
+            user_input.get(CONF_CONTROL_TRIGGER) or TRIGGER_ANY
+        ).strip(),
+        **_command_fields_from_input(user_input),
+    }
+
+
+def _command_needs_state(user_input: dict[str, Any]) -> bool:
+    return user_input.get(
+        CONF_CONTROL_COMMAND, COMMAND_SET_STATE
+    ) == COMMAND_SET_STATE and not user_input.get(CONF_CONTROL_STATE)
+
+
+def _control_label(control: dict[str, Any]) -> str:
+    command = control.get(CONF_CONTROL_COMMAND, COMMAND_SET_STATE)
+    if control.get(CONF_CONTROL_KIND, CONTROL_KIND_ENTITY) == CONTROL_KIND_BUS:
+        source = (
+            f"{control.get(CONF_CONTROL_EVENT_TYPE)} "
+            f"{control.get(CONF_CONTROL_EVENT_DATA, {})}"
+        )
+    else:
+        source = (
+            f"{control.get(CONF_CONTROL_ENTITY)} "
+            f"({control.get(CONF_CONTROL_TRIGGER, TRIGGER_ANY)})"
+        )
+    return f"{source} → {command}"
+
+
+def _suggest_control_id(control: dict[str, Any]) -> str:
+    if control.get(CONF_CONTROL_KIND, CONTROL_KIND_ENTITY) == CONTROL_KIND_BUS:
+        data = control.get(CONF_CONTROL_EVENT_DATA, {})
+        hint = (
+            data.get("command")
+            or data.get("event")
+            or data.get("subtype")
+            or data.get("value")
+            or "press"
+        )
+        return slugify(f"{control.get(CONF_CONTROL_EVENT_TYPE)}_{hint}") or "control"
+    return (
+        slugify(
+            f"{control.get(CONF_CONTROL_ENTITY)}_"
+            f"{control.get(CONF_CONTROL_TRIGGER, TRIGGER_ANY)}"
+        )
+        or "control"
+    )
+
+
+def _unique_control_id(controls: list[dict[str, Any]], base: str) -> str:
+    existing = {control[CONF_STATE_ID] for control in controls}
+    control_id = base
+    suffix = 2
+    while control_id in existing:
+        control_id = f"{base}_{suffix}"
+        suffix += 1
+    return control_id
+
+
+def _command_schema(
+    defaults: dict[str, Any],
+    states: list[dict[str, Any]],
+    *,
+    include_trigger: bool,
+) -> vol.Schema:
+    """The command half of a control form (used for discovered controls)."""
+    schema: dict[Any, Any] = {}
+    if include_trigger:
+        schema[
+            vol.Required(
+                CONF_CONTROL_TRIGGER,
+                default=defaults.get(CONF_CONTROL_TRIGGER, TRIGGER_ANY),
+            )
+        ] = selector({"text": {}})
+    schema[
+        vol.Required(
+            CONF_CONTROL_COMMAND,
+            default=defaults.get(CONF_CONTROL_COMMAND, COMMAND_SET_STATE),
+        )
+    ] = selector(
+        {
+            "select": {
+                "options": list(CONTROL_COMMANDS),
+                "translation_key": "control_command",
+            }
+        }
+    )
+    if states:
+        schema[
+            vol.Optional(
+                CONF_CONTROL_STATE,
+                description={"suggested_value": defaults.get(CONF_CONTROL_STATE)},
+            )
+        ] = selector(
+            {
+                "select": {
+                    "options": [
+                        {
+                            "value": state[CONF_STATE_ID],
+                            "label": state[CONF_STATE_NAME],
+                        }
+                        for state in states
+                    ]
+                }
+            }
+        )
+    schema[
+        vol.Optional(
+            CONF_CONTROL_ACTIONS,
+            description={"suggested_value": defaults.get(CONF_CONTROL_ACTIONS)},
+        )
+    ] = selector({"action": {}})
+    return vol.Schema(schema)
+
+
+async def _async_capture_press(hass: HomeAssistant) -> dict[str, Any] | None:
+    """Wait for the user to press the control they want to bind.
+
+    Watches event entities (modern remotes) and the raw bus event types
+    fired by remotes that never become entities (zha_event, hue_event, ...).
+    The first press wins; returns None on timeout.
+    """
+    future: asyncio.Future[dict[str, Any]] = hass.loop.create_future()
+    unsubs = []
+
+    @callback
+    def _capture(result: dict[str, Any]) -> None:
+        if not future.done():
+            future.set_result(result)
+
+    @callback
+    def _entity_listener(event: Event) -> None:
+        entity_id = event.data.get("entity_id", "")
+        if not entity_id.startswith("event."):
+            return
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
+        if (
+            new_state is None
+            or old_state is None
+            or new_state.state in ("unknown", "unavailable")
+            or new_state.state == old_state.state
+        ):
+            return
+        _capture(
+            {
+                CONF_CONTROL_KIND: CONTROL_KIND_ENTITY,
+                CONF_CONTROL_ENTITY: entity_id,
+                CONF_CONTROL_TRIGGER: new_state.attributes.get("event_type")
+                or TRIGGER_ANY,
+            }
+        )
+
+    @callback
+    def _bus_listener(event: Event) -> None:
+        _capture(
+            {
+                CONF_CONTROL_KIND: CONTROL_KIND_BUS,
+                CONF_CONTROL_EVENT_TYPE: event.event_type,
+                CONF_CONTROL_EVENT_DATA: {
+                    key: value
+                    for key, value in event.data.items()
+                    if isinstance(value, (str, int, float))
+                },
+            }
+        )
+
+    unsubs.append(hass.bus.async_listen("state_changed", _entity_listener))
+    for event_type in CONTROLLER_EVENT_TYPES:
+        unsubs.append(hass.bus.async_listen(event_type, _bus_listener))
+    try:
+        async with asyncio.timeout(CONTROL_CAPTURE_TIMEOUT):
+            return await future
+    except TimeoutError:
+        return None
+    finally:
+        for unsub in unsubs:
+            unsub()
+
+
+def _describe_captured(captured: dict[str, Any]) -> str:
+    if captured.get(CONF_CONTROL_KIND) == CONTROL_KIND_BUS:
+        return (
+            f"{captured.get(CONF_CONTROL_EVENT_TYPE)}: "
+            f"{captured.get(CONF_CONTROL_EVENT_DATA)}"
+        )
+    return (
+        f"{captured.get(CONF_CONTROL_ENTITY)} "
+        f"({captured.get(CONF_CONTROL_TRIGGER)})"
+    )
 
 
 class LabsExperienceConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -302,6 +501,8 @@ class LabsExperienceOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         self._edit_state_id: str | None = None
         self._edit_control_id: str | None = None
+        self._capture_task: asyncio.Task[dict[str, Any] | None] | None = None
+        self._captured: dict[str, Any] | None = None
 
     @property
     def _options(self) -> dict[str, Any]:
@@ -322,7 +523,7 @@ class LabsExperienceOptionsFlow(OptionsFlow):
         menu = ["basics", "phase_actions", "add_state"]
         if self._states():
             menu += ["edit_state", "remove_states"]
-        menu.append("add_control")
+        menu += ["discover_control", "add_control"]
         if self._controls():
             menu += ["edit_control", "remove_controls"]
         return self.async_show_menu(step_id="init", menu_options=menu)
@@ -434,26 +635,15 @@ class LabsExperienceOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            if user_input.get(
-                CONF_CONTROL_COMMAND, COMMAND_SET_STATE
-            ) == COMMAND_SET_STATE and not user_input.get(CONF_CONTROL_STATE):
+            if _command_needs_state(user_input):
                 errors["base"] = "state_required"
             else:
                 controls = self._controls()
-                existing_ids = {control[CONF_STATE_ID] for control in controls}
-                base = (
-                    slugify(
-                        f"{user_input[CONF_CONTROL_ENTITY]}_"
-                        f"{user_input.get(CONF_CONTROL_TRIGGER, TRIGGER_ANY)}"
-                    )
-                    or "control"
+                new_control = _control_from_input(user_input, "")
+                new_control[CONF_STATE_ID] = _unique_control_id(
+                    controls, _suggest_control_id(new_control)
                 )
-                control_id = base
-                suffix = 2
-                while control_id in existing_ids:
-                    control_id = f"{base}_{suffix}"
-                    suffix += 1
-                controls.append(_control_from_input(user_input, control_id))
+                controls.append(new_control)
                 options = self._options
                 options[CONF_CONTROLS] = controls
                 return self.async_create_entry(title="", data=options)
@@ -461,6 +651,64 @@ class LabsExperienceOptionsFlow(OptionsFlow):
             step_id="add_control",
             data_schema=_control_schema(user_input or {}, self._states()),
             errors=errors,
+        )
+
+    async def async_step_discover_control(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if self._capture_task is None:
+            self._capture_task = self.hass.async_create_task(
+                _async_capture_press(self.hass)
+            )
+        if not self._capture_task.done():
+            return self.async_show_progress(
+                progress_action="press_control",
+                progress_task=self._capture_task,
+            )
+        self._captured = self._capture_task.result()
+        self._capture_task = None
+        if self._captured is None:
+            return self.async_show_progress_done(next_step_id="discover_timeout")
+        return self.async_show_progress_done(next_step_id="discover_control_form")
+
+    async def async_step_discover_timeout(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return self.async_abort(reason="no_press_detected")
+
+    async def async_step_discover_control_form(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        captured = self._captured or {}
+        is_entity = (
+            captured.get(CONF_CONTROL_KIND, CONTROL_KIND_ENTITY)
+            == CONTROL_KIND_ENTITY
+        )
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if _command_needs_state(user_input):
+                errors["base"] = "state_required"
+            else:
+                controls = self._controls()
+                new_control = {**captured, **_command_fields_from_input(user_input)}
+                if is_entity:
+                    new_control[CONF_CONTROL_TRIGGER] = (
+                        user_input.get(CONF_CONTROL_TRIGGER) or TRIGGER_ANY
+                    ).strip()
+                new_control[CONF_STATE_ID] = _unique_control_id(
+                    controls, _suggest_control_id(new_control)
+                )
+                controls.append(new_control)
+                options = self._options
+                options[CONF_CONTROLS] = controls
+                return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="discover_control_form",
+            data_schema=_command_schema(
+                user_input or captured, self._states(), include_trigger=is_entity
+            ),
+            errors=errors,
+            description_placeholders={"captured": _describe_captured(captured)},
         )
 
     async def async_step_edit_control(
@@ -477,11 +725,7 @@ class LabsExperienceOptionsFlow(OptionsFlow):
                             "options": [
                                 {
                                     "value": control[CONF_STATE_ID],
-                                    "label": (
-                                        f"{control[CONF_CONTROL_ENTITY]} "
-                                        f"({control[CONF_CONTROL_TRIGGER]} → "
-                                        f"{control[CONF_CONTROL_COMMAND]})"
-                                    ),
+                                    "label": _control_label(control),
                                 }
                                 for control in self._controls()
                             ]
@@ -506,14 +750,17 @@ class LabsExperienceOptionsFlow(OptionsFlow):
         )
         if current is None:
             return self.async_abort(reason="control_not_found")
+        is_bus = current.get(CONF_CONTROL_KIND, CONTROL_KIND_ENTITY) == CONTROL_KIND_BUS
         errors: dict[str, str] = {}
         if user_input is not None:
-            if user_input.get(
-                CONF_CONTROL_COMMAND, COMMAND_SET_STATE
-            ) == COMMAND_SET_STATE and not user_input.get(CONF_CONTROL_STATE):
+            if _command_needs_state(user_input):
                 errors["base"] = "state_required"
             else:
-                updated = _control_from_input(user_input, current[CONF_STATE_ID])
+                if is_bus:
+                    # Bus bindings keep their captured event identity.
+                    updated = {**current, **_command_fields_from_input(user_input)}
+                else:
+                    updated = _control_from_input(user_input, current[CONF_STATE_ID])
                 options = self._options
                 options[CONF_CONTROLS] = [
                     updated
@@ -522,10 +769,17 @@ class LabsExperienceOptionsFlow(OptionsFlow):
                     for control in controls
                 ]
                 return self.async_create_entry(title="", data=options)
+        if is_bus:
+            schema = _command_schema(
+                user_input or current, self._states(), include_trigger=False
+            )
+        else:
+            schema = _control_schema(user_input or current, self._states())
         return self.async_show_form(
             step_id="edit_control_form",
-            data_schema=_control_schema(user_input or current, self._states()),
+            data_schema=schema,
             errors=errors,
+            description_placeholders={"captured": _describe_captured(current)},
         )
 
     async def async_step_remove_controls(
@@ -549,11 +803,7 @@ class LabsExperienceOptionsFlow(OptionsFlow):
                             "options": [
                                 {
                                     "value": control[CONF_STATE_ID],
-                                    "label": (
-                                        f"{control[CONF_CONTROL_ENTITY]} "
-                                        f"({control[CONF_CONTROL_TRIGGER]} → "
-                                        f"{control[CONF_CONTROL_COMMAND]})"
-                                    ),
+                                    "label": _control_label(control),
                                 }
                                 for control in controls
                             ],
