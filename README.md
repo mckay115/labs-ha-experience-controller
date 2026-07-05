@@ -87,6 +87,32 @@ Copy `custom_components/labs_experience` into your config's
    out*). Start the TV: movie lighting, and the room stays occupied for the
    whole film. Turn the TV off and leave: fade down, lights off.
 
+## Modeling a multi-state room
+
+**Priorities are your transition graph.** Give every activity a state, rank
+them, and the room moves between them on its own — no per-transition
+automations. A den that goes standby → ambient → work → media and back:
+
+| State | Priority | Evidence | Notes |
+| --- | --- | --- | --- |
+| *(waking)* | — | — | Wake actions = night/background lights on entry |
+| Ambient | 0 | none (baseline) | Soft background lighting once you stay |
+| Work | 10 | `switch.desk` or `binary_sensor.desk_seat` (any) | Full work lighting while either is active |
+| Media | 20 | `media_player.tv` playing | **Hold occupancy on** — motion can't vacate the room until the TV stops |
+
+How an evening plays out: walk in → night lights (waking) → stay → *Ambient*
+→ flip the desk switch or sit down → *Work* → TV turns on → *Media* outranks
+Work → everyone sits still for two hours → the hold keeps the room occupied
+→ TV off → back to *Ambient* (desk is off) → leave → cool-down → vacant.
+Dropping evidence always falls back down the priority ladder automatically;
+buttons and the select entity can jump anywhere at any time. This exact flow
+runs in [`tests/test_scenarios.py`](tests/test_scenarios.py).
+
+Occupancy itself aggregates any number of sensors — motion, mmWave, desk
+seats, door contacts, counts — and evidence devices (media players, desks)
+assist occupancy through inference + hold, so a quiet movie night never goes
+dark.
+
 ## What each space gives you
 
 | Entity | Purpose |
