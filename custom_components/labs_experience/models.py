@@ -187,6 +187,7 @@ class ControlBinding:
     command: str = COMMAND_SET_STATE
     state_id: str | None = None
     actions: list[dict[str, Any]] = field(default_factory=list)
+    dayparts: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ControlBinding:
@@ -200,6 +201,7 @@ class ControlBinding:
             command=data.get(CONF_CONTROL_COMMAND, COMMAND_SET_STATE),
             state_id=data.get(CONF_CONTROL_STATE),
             actions=list(data.get(CONF_CONTROL_ACTIONS, [])),
+            dayparts=list(data.get(CONF_DAYPARTS, [])),
         )
 
 

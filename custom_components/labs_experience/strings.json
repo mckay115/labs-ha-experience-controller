@@ -225,12 +225,14 @@
           "trigger": "Trigger",
           "command": "Command",
           "state_id": "Experience state",
+          "dayparts": "Limit to dayparts",
           "actions": "Custom actions"
         },
         "data_description": {
           "entity_id": "Event entities (modern button remotes), switches, buttons, or sensors.",
           "trigger": "For event entities: the event type (single, double, long, ...). For other entities: the state that triggers. Use \"any\" to match everything.",
           "state_id": "Required for the Set state command.",
+          "dayparts": "The control only fires during these dayparts. Bind the same button twice with different dayparts to do different things at different times.",
           "actions": "Used by the Run custom actions command."
         }
       },
@@ -247,12 +249,14 @@
           "trigger": "Trigger",
           "command": "Command",
           "state_id": "Experience state",
+          "dayparts": "Limit to dayparts",
           "actions": "Custom actions"
         },
         "data_description": {
           "entity_id": "Event entities (modern button remotes), switches, buttons, or sensors.",
           "trigger": "For event entities: the event type (single, double, long, ...). For other entities: the state that triggers. Use \"any\" to match everything.",
           "state_id": "Required for the Set state command.",
+          "dayparts": "The control only fires during these dayparts. Bind the same button twice with different dayparts to do different things at different times.",
           "actions": "Used by the Run custom actions command."
         }
       },
@@ -269,11 +273,13 @@
           "trigger": "Trigger",
           "command": "Command",
           "state_id": "Experience state",
+          "dayparts": "Limit to dayparts",
           "actions": "Custom actions"
         },
         "data_description": {
           "trigger": "The captured press type. Use \"any\" to react to every press of this control.",
           "state_id": "Required for the Set state command.",
+          "dayparts": "The control only fires during these dayparts. Bind the same button twice with different dayparts to do different things at different times.",
           "actions": "Used by the Run custom actions command."
         }
       }

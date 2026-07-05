@@ -119,8 +119,10 @@ profile, the space behaves well with *zero* further configuration:
   delay saves the thermostat state and pauses; closing restores it.
 - **Dayparts:** every space knows morning/day/evening/night (sun +
   configurable times). States can be limited to dayparts — a *Night
-  light* baseline that only exists at night — and the daypart sensor
-  exposes live circadian targets for dashboards.
+  light* baseline that only exists at night — and **controls too**: bind
+  the same button twice with different dayparts to do different things at
+  different times. The daypart sensor exposes live circadian targets for
+  dashboards.
 
 ## Modeling a multi-state room
 

@@ -584,6 +584,9 @@ def _control_schema(
             }
         )
     schema[
+        vol.Optional(CONF_DAYPARTS, default=list(defaults.get(CONF_DAYPARTS, [])))
+    ] = _dayparts_selector()
+    schema[
         vol.Optional(
             CONF_CONTROL_ACTIONS,
             description={"suggested_value": defaults.get(CONF_CONTROL_ACTIONS)},
@@ -597,7 +600,20 @@ def _command_fields_from_input(user_input: dict[str, Any]) -> dict[str, Any]:
         CONF_CONTROL_COMMAND: user_input.get(CONF_CONTROL_COMMAND, COMMAND_SET_STATE),
         CONF_CONTROL_STATE: user_input.get(CONF_CONTROL_STATE),
         CONF_CONTROL_ACTIONS: user_input.get(CONF_CONTROL_ACTIONS) or [],
+        CONF_DAYPARTS: list(user_input.get(CONF_DAYPARTS, [])),
     }
+
+
+def _dayparts_selector() -> Any:
+    return selector(
+        {
+            "select": {
+                "options": [daypart.value for daypart in Daypart],
+                "multiple": True,
+                "translation_key": "dayparts",
+            }
+        }
+    )
 
 
 def _control_from_input(user_input: dict[str, Any], control_id: str) -> dict[str, Any]:
@@ -710,6 +726,9 @@ def _command_schema(
                 }
             }
         )
+    schema[
+        vol.Optional(CONF_DAYPARTS, default=list(defaults.get(CONF_DAYPARTS, [])))
+    ] = _dayparts_selector()
     schema[
         vol.Optional(
             CONF_CONTROL_ACTIONS,

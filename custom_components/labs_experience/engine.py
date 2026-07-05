@@ -624,6 +624,8 @@ class SpaceEngine:
 
     @callback
     def _execute_control(self, control: ControlBinding) -> None:
+        if control.dayparts and self.daypart.value not in control.dayparts:
+            return
         command = control.command
         if command == COMMAND_TOGGLE_AUTOMATION:
             # Works even while paused, so a button can always un-pause.
