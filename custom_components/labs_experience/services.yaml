@@ -1,0 +1,17 @@
+set_state:
+  target:
+    entity:
+      integration: labs_experience
+      domain: select
+  fields:
+    state:
+      required: true
+      example: watching_tv
+      selector:
+        text:
+
+clear_override:
+  target:
+    entity:
+      integration: labs_experience
+      domain: select

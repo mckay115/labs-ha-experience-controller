@@ -1,0 +1,257 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Create a space",
+        "description": "A space wraps an area with presence tracking, an occupancy lifecycle, and experience states.",
+        "data": {
+          "name": "Name",
+          "area_id": "Area",
+          "presence_entities": "Presence entities",
+          "presence_match": "Extra presence states",
+          "wake_duration": "Wake duration",
+          "clear_delay": "Clear delay",
+          "pass_through_delay": "Pass-through delay",
+          "cooldown_duration": "Cool-down duration"
+        },
+        "data_description": {
+          "presence_entities": "Motion, occupancy, mmWave, zone, person, or count entities that mean someone is in this space. Numeric states above zero count as presence.",
+          "presence_match": "Comma-separated extra states that count as presence — e.g. this room's name for BLE room trackers (Bermuda, ESPresense).",
+          "wake_duration": "Seconds presence must persist before the space counts as fully occupied.",
+          "clear_delay": "Seconds after presence clears (while occupied) before the space starts cooling down.",
+          "pass_through_delay": "Seconds after presence clears (while waking) before it counts as passing through.",
+          "cooldown_duration": "Seconds spent winding down before the space is vacant. Set to 0 to skip."
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "A space with this name already exists."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manage this space",
+        "menu_options": {
+          "basics": "Presence & timing",
+          "phase_actions": "Wake, cool-down, vacant & pass-through actions",
+          "add_state": "Add an experience state",
+          "edit_state": "Edit an experience state",
+          "remove_states": "Remove experience states",
+          "add_control": "Add a control (button, switch, remote)",
+          "edit_control": "Edit a control",
+          "remove_controls": "Remove controls"
+        }
+      },
+      "basics": {
+        "title": "Presence & timing",
+        "data": {
+          "area_id": "Area",
+          "presence_entities": "Presence entities",
+          "presence_match": "Extra presence states",
+          "wake_duration": "Wake duration",
+          "clear_delay": "Clear delay",
+          "pass_through_delay": "Pass-through delay",
+          "cooldown_duration": "Cool-down duration"
+        },
+        "data_description": {
+          "presence_entities": "Motion, occupancy, mmWave, zone, person, or count entities that mean someone is in this space. Numeric states above zero count as presence.",
+          "presence_match": "Comma-separated extra states that count as presence — e.g. this room's name for BLE room trackers (Bermuda, ESPresense).",
+          "wake_duration": "Seconds presence must persist before the space counts as fully occupied.",
+          "clear_delay": "Seconds after presence clears (while occupied) before the space starts cooling down.",
+          "pass_through_delay": "Seconds after presence clears (while waking) before it counts as passing through.",
+          "cooldown_duration": "Seconds spent winding down before the space is vacant. Set to 0 to skip."
+        }
+      },
+      "phase_actions": {
+        "title": "Phase actions",
+        "description": "Actions that run when the space wakes (gentle acknowledgement), starts cooling down, goes vacant, or was only passed through. Use conditions inside the actions for time-of-day variants.",
+        "data": {
+          "wake_actions": "Wake actions",
+          "cooldown_actions": "Cool-down actions",
+          "vacant_actions": "Vacant actions",
+          "pass_through_actions": "Pass-through actions"
+        },
+        "data_description": {
+          "pass_through_actions": "Runs instead of the vacant actions when someone only passed through. Leave empty to use the vacant actions."
+        }
+      },
+      "add_state": {
+        "title": "Add an experience state",
+        "data": {
+          "name": "Name",
+          "icon": "Icon",
+          "priority": "Priority",
+          "evidence_entities": "Evidence entities",
+          "evidence_mode": "Evidence mode",
+          "active_states": "Active states",
+          "hold_occupancy": "Hold occupancy while evidence is active",
+          "enter_actions": "Enter actions",
+          "exit_actions": "Exit actions"
+        },
+        "data_description": {
+          "priority": "When several states match, the highest priority wins.",
+          "evidence_entities": "Entities whose state indicates this experience. Leave empty to make this the baseline state.",
+          "active_states": "Comma-separated entity states that count as active evidence.",
+          "hold_occupancy": "Keep the space occupied while this state's evidence is active, even if motion stops — perfect for movie night.",
+          "enter_actions": "Runs when the space enters this state.",
+          "exit_actions": "Runs when the space leaves this state."
+        }
+      },
+      "edit_state": {
+        "title": "Edit an experience state",
+        "data": {
+          "state": "State"
+        }
+      },
+      "edit_state_form": {
+        "title": "Edit an experience state",
+        "data": {
+          "name": "Name",
+          "icon": "Icon",
+          "priority": "Priority",
+          "evidence_entities": "Evidence entities",
+          "evidence_mode": "Evidence mode",
+          "active_states": "Active states",
+          "hold_occupancy": "Hold occupancy while evidence is active",
+          "enter_actions": "Enter actions",
+          "exit_actions": "Exit actions"
+        },
+        "data_description": {
+          "priority": "When several states match, the highest priority wins.",
+          "evidence_entities": "Entities whose state indicates this experience. Leave empty to make this the baseline state.",
+          "active_states": "Comma-separated entity states that count as active evidence.",
+          "hold_occupancy": "Keep the space occupied while this state's evidence is active, even if motion stops — perfect for movie night.",
+          "enter_actions": "Runs when the space enters this state.",
+          "exit_actions": "Runs when the space leaves this state."
+        }
+      },
+      "remove_states": {
+        "title": "Remove experience states",
+        "data": {
+          "states": "States to remove"
+        }
+      },
+      "add_control": {
+        "title": "Add a control",
+        "description": "Bind a physical button, switch, remote, or any entity to a space command — like Switch Manager, but space-aware.",
+        "data": {
+          "entity_id": "Control entity",
+          "trigger": "Trigger",
+          "command": "Command",
+          "state_id": "Experience state",
+          "actions": "Custom actions"
+        },
+        "data_description": {
+          "entity_id": "Event entities (modern button remotes), switches, buttons, or sensors.",
+          "trigger": "For event entities: the event type (single, double, long, ...). For other entities: the state that triggers. Use \"any\" to match everything.",
+          "state_id": "Required for the Set state command.",
+          "actions": "Used by the Run custom actions command."
+        }
+      },
+      "edit_control": {
+        "title": "Edit a control",
+        "data": {
+          "control": "Control"
+        }
+      },
+      "edit_control_form": {
+        "title": "Edit a control",
+        "data": {
+          "entity_id": "Control entity",
+          "trigger": "Trigger",
+          "command": "Command",
+          "state_id": "Experience state",
+          "actions": "Custom actions"
+        },
+        "data_description": {
+          "entity_id": "Event entities (modern button remotes), switches, buttons, or sensors.",
+          "trigger": "For event entities: the event type (single, double, long, ...). For other entities: the state that triggers. Use \"any\" to match everything.",
+          "state_id": "Required for the Set state command.",
+          "actions": "Used by the Run custom actions command."
+        }
+      },
+      "remove_controls": {
+        "title": "Remove controls",
+        "data": {
+          "controls": "Controls to remove"
+        }
+      }
+    },
+    "error": {
+      "state_required": "Pick an experience state for the Set state command."
+    },
+    "abort": {
+      "state_not_found": "That state no longer exists.",
+      "control_not_found": "That control no longer exists."
+    }
+  },
+  "selector": {
+    "evidence_mode": {
+      "options": {
+        "any": "Any evidence entity is active",
+        "all": "All evidence entities are active"
+      }
+    },
+    "control_command": {
+      "options": {
+        "set_state": "Set an experience state",
+        "cycle_states": "Cycle through experience states",
+        "resume_automatic": "Resume automatic",
+        "wake": "Wake the space",
+        "make_vacant": "Put the space to sleep",
+        "toggle_automation": "Toggle space automation",
+        "run_actions": "Run custom actions"
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "experience": {
+        "name": "Experience"
+      }
+    },
+    "sensor": {
+      "phase": {
+        "name": "Phase",
+        "state": {
+          "vacant": "Vacant",
+          "waking": "Waking",
+          "occupied": "Occupied",
+          "cooldown": "Cool-down"
+        }
+      }
+    },
+    "binary_sensor": {
+      "occupied": {
+        "name": "Occupied"
+      }
+    },
+    "switch": {
+      "automation": {
+        "name": "Automation"
+      }
+    },
+    "button": {
+      "resume_automatic": {
+        "name": "Resume automatic"
+      }
+    }
+  },
+  "services": {
+    "set_state": {
+      "name": "Set experience state",
+      "description": "Pins a space to an experience state (waking it if vacant) until cleared or the space goes vacant.",
+      "fields": {
+        "state": {
+          "name": "State",
+          "description": "Name or ID of the experience state."
+        }
+      }
+    },
+    "clear_override": {
+      "name": "Clear override",
+      "description": "Returns a space to automatic experience selection."
+    }
+  }
+}

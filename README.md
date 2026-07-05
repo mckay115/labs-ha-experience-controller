@@ -1,0 +1,163 @@
+# Labs Experience Controller for Home Assistant
+
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
+[![Validate](https://github.com/mckay115/labs-ha-experience-controller/actions/workflows/validate.yml/badge.svg)](https://github.com/mckay115/labs-ha-experience-controller/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+Turn areas into **Spaces** with experiential behavior. A space gently
+acknowledges you when you enter, settles into an experience while you're
+there (*Watching TV*, *Hanging out*, *Working*), recognizes when you just
+pass through, and winds down gracefully when you leave — all from one
+config entry instead of a dozen fragile automations.
+
+Part of the Labs ecosystem:
+[labs-ha-themes](https://github.com/mckay115/labs-ha-themes) ·
+[labs-ha-cards](https://github.com/mckay115/labs-ha-cards)
+
+## How it works
+
+Every space runs a two-layer engine:
+
+**1. Occupancy lifecycle** (automatic):
+
+```
+vacant ──presence──▶ waking ──persists──▶ occupied ──presence gone──▶ cooldown ──▶ vacant
+   ▲                    │                                                  │
+   └── passing through ◀┘ (quick in-and-out)          (presence returns ──▶ occupied)
+```
+
+- **Waking** — the space acknowledges you without fully waking: dim a lamp
+  to 20%, not blast every light.
+- **Passing through** — presence that ends during waking never fully wakes
+  the room; run quick-off actions instead.
+- **Cool-down** — a graceful wind-down (fade lights) before vacant, with
+  instant recovery if you come back.
+
+**2. Experience states** (yours): define states per space with *evidence* —
+*Watching TV* when the TV is playing (priority 10), *Hanging out* otherwise
+(no evidence = baseline). The highest-priority matching state wins, runs
+your enter/exit actions, and shows on a select entity you can override
+anytime. States with **hold occupancy** keep the room alive while their
+evidence is active — no more lights-off in the middle of a movie because
+you sat still.
+
+**Controls**: bind physical buttons, remotes, and switches (modern `event`
+entities included) to space commands — set a state, cycle states, wake,
+sleep, resume automatic, or run custom actions. Like Switch Manager, but
+space-aware.
+
+## Modern sensors welcome
+
+Presence understands classic motion, occupancy and door sensors, mmWave
+sensors (FP1/FP2-class `present` / `moving` / `stationary` states),
+persons and geo zones, and **numeric counts** — any state above zero is
+presence, so ESPresense/Bermuda person counts and zone occupancy work
+out of the box. BLE room trackers that report a room name are covered by
+the per-space *extra presence states* field.
+
+## Installation
+
+### HACS
+
+1. In HACS, open the overflow menu (⋮) → **Custom repositories**.
+2. Add `https://github.com/mckay115/labs-ha-experience-controller` with type **Integration**.
+3. Install **Labs Experience Controller** and restart Home Assistant.
+
+### Manual
+
+Copy `custom_components/labs_experience` into your config's
+`custom_components` folder and restart.
+
+## Quick start: a living room in five minutes
+
+1. **Settings → Devices & services → Add integration → Labs Experience
+   Controller.** Name it *Living Room*, pick the area, select your motion /
+   occupancy / mmWave sensors, keep the default timings.
+2. Open the entry's **Configure** menu:
+   - **Add an experience state** → *Hanging out*: no evidence entities
+     (baseline), priority 0, enter actions = comfortable lighting scene.
+   - **Add an experience state** → *Watching TV*: evidence =
+     `media_player.living_room_tv`, priority 10, **hold occupancy on**,
+     enter actions = movie lighting, exit actions = restore.
+   - **Wake, cool-down, vacant & pass-through actions** → wake = dim lamp
+     to 20%; cool-down = fade to 40%; vacant = lights off.
+   - **Add a control** → your remote's `event` entity, trigger `single`,
+     command *Cycle through experience states*.
+3. Walk in: the lamp dims up (waking) → full scene (occupied, *Hanging
+   out*). Start the TV: movie lighting, and the room stays occupied for the
+   whole film. Turn the TV off and leave: fade down, lights off.
+
+## What each space gives you
+
+| Entity | Purpose |
+| --- | --- |
+| `select.<space>_experience` | Current experience. Selecting = manual override (until vacant or *Resume automatic*). |
+| `sensor.<space>_phase` | `vacant` / `waking` / `occupied` / `cooldown`, with since/presence/override attributes. |
+| `binary_sensor.<space>_occupied` | On while waking or occupied. |
+| `switch.<space>_automation` | Pause/resume this space's engine (survives restarts). |
+| `button.<space>_resume_automatic` | Clear a manual override. |
+
+**Actions (services)** — target the space's select entity:
+
+```yaml
+action: labs_experience.set_state
+target:
+  entity_id: select.living_room_experience
+data:
+  state: watching_tv   # id or name; wakes the space if vacant
+```
+
+`labs_experience.clear_override` returns a space to automatic.
+
+## Building on top: your automations still rule
+
+Everything is a normal entity, so the native automation editor works —
+no YAML events needed:
+
+> **When** `select.living_room_experience` becomes *Watching TV* →
+> close the blinds.
+
+For advanced flows, every transition also fires a `labs_experience_event`:
+
+```yaml
+triggers:
+  - trigger: event
+    event_type: labs_experience_event
+    event_data:
+      space: Living Room
+      type: state_changed          # or phase_changed / passing_through
+      to: watching_tv
+```
+
+## Dashboard
+
+A tile card per space makes a simple viewer today:
+
+```yaml
+type: vertical-stack
+cards:
+  - type: tile
+    entity: select.living_room_experience
+    features:
+      - type: select-options
+  - type: tile
+    entity: sensor.living_room_phase
+```
+
+A dedicated space card with a planner/viewer UI is on the roadmap in
+[labs-ha-cards](https://github.com/mckay115/labs-ha-cards).
+
+## Tips
+
+- Motion sensors with long built-in off-delays: shorten them and let the
+  space's *clear delay* do the debouncing instead.
+- Wake actions run day and night — put a sun/time condition inside the
+  action sequence for "warm dim at night, nothing at noon".
+- *Paused* media ends a hold by default; add `paused` to the state's
+  *active states* if popcorn breaks shouldn't count as leaving.
+
+See [DESIGN.md](DESIGN.md) for the full design and roadmap.
+
+## License
+
+[MIT](LICENSE)

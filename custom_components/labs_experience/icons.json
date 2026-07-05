@@ -1,0 +1,43 @@
+{
+  "entity": {
+    "select": {
+      "experience": {
+        "default": "mdi:theater"
+      }
+    },
+    "sensor": {
+      "phase": {
+        "default": "mdi:motion-sensor",
+        "state": {
+          "vacant": "mdi:sleep",
+          "waking": "mdi:weather-sunset-up",
+          "occupied": "mdi:account",
+          "cooldown": "mdi:weather-sunset-down"
+        }
+      }
+    },
+    "binary_sensor": {
+      "occupied": {
+        "default": "mdi:home-account"
+      }
+    },
+    "switch": {
+      "automation": {
+        "default": "mdi:robot"
+      }
+    },
+    "button": {
+      "resume_automatic": {
+        "default": "mdi:refresh-auto"
+      }
+    }
+  },
+  "services": {
+    "set_state": {
+      "service": "mdi:theater"
+    },
+    "clear_override": {
+      "service": "mdi:refresh-auto"
+    }
+  }
+}
