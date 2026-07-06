@@ -1,8 +1,7 @@
 """The grouped options menu and the common-states quick start."""
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.labs_experience.const import DOMAIN
 

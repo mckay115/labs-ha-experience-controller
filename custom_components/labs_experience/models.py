@@ -12,20 +12,39 @@ from .const import (
     CLIMATE_INTENT_KEEP,
     COMMAND_SET_STATE,
     CONF_ACTIVE_STATES,
+    CONF_AMBIANCE_ENTITY,
+    CONF_AMBIANCE_RULES,
+    CONF_AMBIANCE_STATES,
     CONF_APPLIANCE_ENTITIES,
+    CONF_AREA,
     CONF_AUTO_LIGHTING,
+    CONF_BRIGHTNESS_CAP,
     CONF_CIRCADIAN,
+    CONF_CLEAR_DELAY,
     CONF_CLIMATE_ENTITIES,
     CONF_CLIMATE_INTENT,
     CONF_COMFORT_TEMP,
+    CONF_CONTROL_ACTIONS,
+    CONF_CONTROL_COMMAND,
+    CONF_CONTROL_ENTITY,
     CONF_CONTROL_EVENT_DATA,
     CONF_CONTROL_EVENT_TYPE,
     CONF_CONTROL_KIND,
+    CONF_CONTROL_STATE,
+    CONF_CONTROL_TRIGGER,
+    CONF_CONTROLS,
+    CONF_COOLDOWN_ACTIONS,
+    CONF_COOLDOWN_DURATION,
     CONF_DAY_START,
     CONF_DAYPARTS,
     CONF_DOOR_SENSORS,
     CONF_ECO_TEMP,
+    CONF_ENTER_ACTIONS,
     CONF_EVENING_START,
+    CONF_EVIDENCE_ENTITIES,
+    CONF_EVIDENCE_MODE,
+    CONF_EXIT_ACTIONS,
+    CONF_HOLD_OCCUPANCY,
     CONF_ILLUMINANCE_SENSOR,
     CONF_LIGHT_BRIGHTNESS,
     CONF_LIGHT_COLOR,
@@ -40,42 +59,6 @@ from .const import (
     CONF_MIN_KELVIN,
     CONF_MORNING_START,
     CONF_NIGHT_START,
-    CONF_VACANT_CLIMATE,
-    CONF_WINDOW_PAUSE_DELAY,
-    CONF_WINDOW_SENSORS,
-    CONTROL_KIND_ENTITY,
-    DEFAULT_COMFORT_TEMP,
-    DEFAULT_DAY_START,
-    DEFAULT_ECO_TEMP,
-    DEFAULT_EVENING_START,
-    DEFAULT_LUX_THRESHOLD,
-    DEFAULT_MANUAL_HOLD,
-    DEFAULT_MAX_BRIGHTNESS,
-    DEFAULT_MAX_KELVIN,
-    DEFAULT_MIN_BRIGHTNESS,
-    DEFAULT_MIN_KELVIN,
-    DEFAULT_MORNING_START,
-    DEFAULT_NIGHT_START,
-    DEFAULT_TARGET_LUX,
-    DEFAULT_VACANT_CLIMATE,
-    DEFAULT_WINDOW_PAUSE_DELAY,
-    LIGHT_COLOR_CIRCADIAN,
-    LIGHT_ROLE_KEYS,
-    CONF_AREA,
-    CONF_CLEAR_DELAY,
-    CONF_CONTROL_ACTIONS,
-    CONF_CONTROL_COMMAND,
-    CONF_CONTROL_ENTITY,
-    CONF_CONTROL_STATE,
-    CONF_CONTROL_TRIGGER,
-    CONF_CONTROLS,
-    CONF_COOLDOWN_ACTIONS,
-    CONF_COOLDOWN_DURATION,
-    CONF_ENTER_ACTIONS,
-    CONF_EVIDENCE_ENTITIES,
-    CONF_EVIDENCE_MODE,
-    CONF_EXIT_ACTIONS,
-    CONF_HOLD_OCCUPANCY,
     CONF_PASS_THROUGH_ACTIONS,
     CONF_PASS_THROUGH_DELAY,
     CONF_PRESENCE_ENTITIES,
@@ -87,15 +70,38 @@ from .const import (
     CONF_STATES,
     CONF_TARGET_LUX,
     CONF_VACANT_ACTIONS,
+    CONF_VACANT_BRIGHTNESS,
+    CONF_VACANT_CLIMATE,
     CONF_WAKE_ACTIONS,
+    CONF_WAKE_BRIGHTNESS,
     CONF_WAKE_DURATION,
+    CONF_WINDOW_PAUSE_DELAY,
+    CONF_WINDOW_SENSORS,
+    CONTROL_KIND_ENTITY,
     DEFAULT_ACTIVE_STATES,
     DEFAULT_CLEAR_DELAY,
+    DEFAULT_COMFORT_TEMP,
     DEFAULT_COOLDOWN_DURATION,
+    DEFAULT_DAY_START,
+    DEFAULT_ECO_TEMP,
+    DEFAULT_EVENING_START,
+    DEFAULT_LUX_THRESHOLD,
+    DEFAULT_MANUAL_HOLD,
+    DEFAULT_MAX_BRIGHTNESS,
+    DEFAULT_MAX_KELVIN,
+    DEFAULT_MIN_BRIGHTNESS,
+    DEFAULT_MIN_KELVIN,
+    DEFAULT_MORNING_START,
+    DEFAULT_NIGHT_START,
     DEFAULT_PASS_THROUGH_DELAY,
+    DEFAULT_TARGET_LUX,
+    DEFAULT_VACANT_CLIMATE,
     DEFAULT_WAKE_DURATION,
+    DEFAULT_WINDOW_PAUSE_DELAY,
     EVIDENCE_MODE_ANY,
     FALLBACK_STATE_ID,
+    LIGHT_COLOR_CIRCADIAN,
+    LIGHT_ROLE_KEYS,
     TRIGGER_ANY,
 )
 
@@ -205,6 +211,40 @@ class ControlBinding:
         )
 
 
+@dataclass(slots=True)
+class AmbianceRule:
+    """A lighting overlay driven by another entity's state.
+
+    Typically the entity is a neighbor space's experience select, making
+    this space a *passive* participant in the neighbor's activity —
+    dimmed while the living-room movie runs, glowing instead of dark
+    when idle.
+    """
+
+    id: str
+    entity_id: str
+    states: frozenset[str]
+    priority: int = 0
+    brightness_cap: int | None = None
+    vacant_brightness: int | None = None
+    wake_brightness: int | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AmbianceRule:
+        def opt_int(value: Any) -> int | None:
+            return int(value) if value is not None else None
+
+        return cls(
+            id=data[CONF_STATE_ID],
+            entity_id=data[CONF_AMBIANCE_ENTITY],
+            states=parse_active_states(data.get(CONF_AMBIANCE_STATES, "")),
+            priority=int(data.get(CONF_PRIORITY, 0)),
+            brightness_cap=opt_int(data.get(CONF_BRIGHTNESS_CAP)),
+            vacant_brightness=opt_int(data.get(CONF_VACANT_BRIGHTNESS)),
+            wake_brightness=opt_int(data.get(CONF_WAKE_BRIGHTNESS)),
+        )
+
+
 def fallback_state() -> ExperienceState:
     """The implicit baseline used when no user-defined state matches."""
     return ExperienceState(id=FALLBACK_STATE_ID, name="Occupied", priority=-(10**9))
@@ -228,6 +268,7 @@ class SpaceConfig:
     pass_through_actions: list[dict[str, Any]]
     states: list[ExperienceState]
     controls: list[ControlBinding]
+    ambiance_rules: list[AmbianceRule]
     # Room profile
     lights: dict[str, list[str]]
     climate_entities: list[str]
@@ -280,6 +321,10 @@ class SpaceConfig:
             states=[ExperienceState.from_dict(s) for s in options.get(CONF_STATES, [])],
             controls=[
                 ControlBinding.from_dict(c) for c in options.get(CONF_CONTROLS, [])
+            ],
+            ambiance_rules=[
+                AmbianceRule.from_dict(r)
+                for r in options.get(CONF_AMBIANCE_RULES, [])
             ],
             lights={
                 role: list(options.get(key, []))

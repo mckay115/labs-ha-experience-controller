@@ -3,11 +3,11 @@
   "name": "Labs Experience Controller",
   "codeowners": ["@mckay115"],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/mckay115/labs-ha-experience-controller",
   "integration_type": "hub",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/mckay115/labs-ha-experience-controller/issues",
   "requirements": [],
-  "version": "0.4.1"
+  "version": "0.5.0"
 }

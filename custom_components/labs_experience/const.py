@@ -118,6 +118,15 @@ DEFAULT_ECO_TEMP = 17.0
 DEFAULT_VACANT_CLIMATE = CLIMATE_INTENT_KEEP
 DEFAULT_WINDOW_PAUSE_DELAY = 120
 
+# Ambiance rules: another entity's state (usually a neighbor space's
+# experience select) overlays lighting constraints on this space.
+CONF_AMBIANCE_RULES = "ambiance_rules"
+CONF_AMBIANCE_ENTITY = "entity_id"
+CONF_AMBIANCE_STATES = "states"
+CONF_BRIGHTNESS_CAP = "brightness_cap"
+CONF_VACANT_BRIGHTNESS = "vacant_brightness"
+CONF_WAKE_BRIGHTNESS = "wake_brightness"
+
 # Daypart boundaries ("HH:MM" local time; night wraps midnight)
 CONF_MORNING_START = "morning_start"
 CONF_DAY_START = "day_start"
@@ -172,9 +181,11 @@ COMMAND_LIGHTS_ON = "lights_on"
 COMMAND_LIGHTS_OFF = "lights_off"
 COMMAND_BRIGHTEN = "brighten"
 COMMAND_DIM = "dim"
+COMMAND_TOGGLE_STATE = "toggle_state"
 
 CONTROL_COMMANDS = [
     COMMAND_SET_STATE,
+    COMMAND_TOGGLE_STATE,
     COMMAND_CYCLE_STATES,
     COMMAND_RESUME_AUTOMATIC,
     COMMAND_WAKE,

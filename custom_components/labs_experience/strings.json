@@ -49,7 +49,52 @@
           "profile": "Assign lights, climate, media & openings",
           "fill_from_area": "Fill the room profile from the area",
           "lighting_settings": "Lighting & circadian settings",
-          "climate_settings": "Climate settings"
+          "climate_settings": "Climate settings",
+          "add_ambiance": "Add a shared-ambiance rule (react to another space)",
+          "edit_ambiance": "Edit a shared-ambiance rule",
+          "remove_ambiance": "Remove shared-ambiance rules"
+        }
+      },
+      "add_ambiance": {
+        "title": "Shared-ambiance rule",
+        "description": "While the watched entity matches, this space's lighting is reshaped — perfect for open floor plans: cap the kitchen while the living-room movie runs, keep a faint glow instead of full dark.",
+        "data": {
+          "entity_id": "Watched entity",
+          "states": "Matching states",
+          "priority": "Priority",
+          "brightness_cap": "Brightness cap",
+          "vacant_brightness": "Vacant glow",
+          "wake_brightness": "Wake brightness"
+        },
+        "data_description": {
+          "entity_id": "Usually a neighbor space's Experience select — but any entity works (a bedtime toggle, an alarm state).",
+          "states": "Comma-separated states that activate the rule, matched case-insensitively (e.g. media).",
+          "brightness_cap": "No light in this space exceeds this while the rule matches.",
+          "vacant_brightness": "Instead of turning everything off when vacant, keep the night (or ambient) lights glowing at this level.",
+          "wake_brightness": "Overrides the gentle wake level while the rule matches."
+        }
+      },
+      "edit_ambiance": {
+        "title": "Edit a shared-ambiance rule",
+        "data": {
+          "rule": "Rule"
+        }
+      },
+      "edit_ambiance_form": {
+        "title": "Edit a shared-ambiance rule",
+        "data": {
+          "entity_id": "Watched entity",
+          "states": "Matching states",
+          "priority": "Priority",
+          "brightness_cap": "Brightness cap",
+          "vacant_brightness": "Vacant glow",
+          "wake_brightness": "Wake brightness"
+        }
+      },
+      "remove_ambiance": {
+        "title": "Remove shared-ambiance rules",
+        "data": {
+          "rules": "Rules to remove"
         }
       },
       "states_menu": {
@@ -381,7 +426,8 @@
       "state_not_found": "That state no longer exists.",
       "control_not_found": "That control no longer exists.",
       "no_press_detected": "No press was detected within 30 seconds. Open the menu and try again.",
-      "no_area": "This space has no area assigned. Set one under Presence & timing first."
+      "no_area": "This space has no area assigned. Set one under Presence & timing first.",
+      "rule_not_found": "That rule no longer exists."
     }
   },
   "selector": {
@@ -394,6 +440,7 @@
     "control_command": {
       "options": {
         "set_state": "Set an experience state",
+        "toggle_state": "Toggle an experience state",
         "cycle_states": "Cycle through experience states",
         "resume_automatic": "Resume automatic",
         "wake": "Wake the space",

@@ -1,3 +1,5 @@
+<img src="assets/brands/custom_integrations/labs_experience/icon.png" align="right" width="96" alt="Labs Experience Controller icon" />
+
 # Labs Experience Controller for Home Assistant
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
@@ -120,6 +122,40 @@ profile, the space behaves well with *zero* further configuration:
   the same button twice with different dayparts to do different things at
   different times. The daypart sensor exposes live circadian targets for
   dashboards.
+
+## Open floor plans: shared ambiance
+
+In open plans, spaces overlap: the kitchen shouldn't blast to 100 % while
+a movie plays in the adjoining living room. **Shared-ambiance rules**
+(Configure → Room profile & comfort) make a space a *passive* participant
+in a neighbor's activity: watch any entity — usually the neighbor's
+Experience select — and while it matches, this space's lighting is
+reshaped: a **brightness cap** on everything, a **vacant glow** (faint
+night light instead of full dark), and a gentler **wake** level. When the
+rule stops matching, everything restores as it was.
+
+The kitchen next to a living room and a dining room:
+
+| Rule | Effect |
+| --- | --- |
+| `select.living_room_experience` = `media` | cap 25 %, vacant glow 10 %, wake 15 % — movie stays sacred |
+| `select.dining_room_experience` = `media` | no cap (bright is fine), optional glow |
+
+Each open-plan zone keeps its **own** presence (per-zone mmWave entities,
+e.g. FP2 zones) — ambiance is shared, occupancy stays local. Manual
+lighting authority always beats ambiance. Rules aren't limited to spaces:
+a bedtime toggle or alarm state can cap a hallway the same way.
+
+## The Spaces panel
+
+Installing adds a **Spaces** item to the sidebar — a native overview of
+every space grouped by area: live phase, experience picker, daypart,
+manual-lighting badge, resume and pause buttons. Click a space to expand
+its **lifecycle flow** (vacant → waking → occupied → cool-down with the
+current phase lit) and its **state ladder**: every state ranked by
+priority with live evidence chips that light up as sensors match — and a
+**try** button on each state to test it instantly. Editing jumps straight
+into the native configure flow.
 
 ## Modeling a multi-state room
 

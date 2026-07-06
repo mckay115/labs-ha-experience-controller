@@ -7,8 +7,6 @@ from datetime import datetime, timedelta
 import logging
 from typing import TYPE_CHECKING, Any
 
-import voluptuous as vol
-
 from homeassistant.core import (
     CALLBACK_TYPE,
     Context,
@@ -17,8 +15,7 @@ from homeassistant.core import (
     HomeAssistant,
     callback,
 )
-from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import area_registry as ar, config_validation as cv
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
@@ -26,6 +23,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.helpers.script import Script
 from homeassistant.util import dt as dt_util
+import voluptuous as vol
 
 from .circadian import DaypartBoundaries, compute_daypart
 from .climate import ClimateFacet
@@ -40,6 +38,7 @@ from .const import (
     COMMAND_RUN_ACTIONS,
     COMMAND_SET_STATE,
     COMMAND_TOGGLE_AUTOMATION,
+    COMMAND_TOGGLE_STATE,
     COMMAND_WAKE,
     CONTROL_KIND_BUS,
     CONTROL_KIND_ENTITY,
@@ -145,6 +144,7 @@ class SpaceEngine:
         tracked.update(self.config.all_profile_lights)
         tracked.update(self.config.climate_entities)
         tracked.update(self.config.window_sensors)
+        tracked.update(rule.entity_id for rule in self.config.ambiance_rules)
         if self.config.illuminance_sensor:
             tracked.add(self.config.illuminance_sensor)
         if tracked:
@@ -304,6 +304,8 @@ class SpaceEngine:
             self.lighting.on_light_event(event)
         if entity_id == self.config.illuminance_sensor:
             self.lighting.on_lux_event()
+        if any(rule.entity_id == entity_id for rule in self.config.ambiance_rules):
+            self.lighting.on_ambiance_event()
         if entity_id in self.config.climate_entities:
             self.climate.on_climate_event(event)
         if entity_id in self.config.window_sensors:
@@ -642,6 +644,15 @@ class SpaceEngine:
         elif command == COMMAND_SET_STATE:
             if control.state_id:
                 self.async_command_state(control.state_id)
+        elif command == COMMAND_TOGGLE_STATE:
+            if control.state_id:
+                if (
+                    self.active_state is not None
+                    and self.active_state.id == control.state_id
+                ):
+                    self.async_set_override(None)
+                else:
+                    self.async_command_state(control.state_id)
         elif command == COMMAND_CYCLE_STATES:
             self._cycle_state()
         elif command == COMMAND_RESUME_AUTOMATIC:

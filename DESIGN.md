@@ -198,12 +198,33 @@ Requires HA ≥ 2024.12 (`entry.runtime_data`, modern `OptionsFlow`).
 - **Presence-hold booleans / Wasp-in-a-box blueprints** — replaced by
   `hold_occupancy` and the lifecycle engine.
 
+### Shared ambiance (v0.5)
+
+Open floor plans need spaces that are *passive* participants in a
+neighbor's activity. An `AmbianceRule` watches any entity (typically the
+neighbor's experience select) and, while matching, overlays this space's
+lighting: brightness cap, vacant glow, wake level. Highest priority wins;
+manual authority always beats ambiance; occupancy stays local per zone.
+Because the trigger is a plain entity, the same mechanism handles bedtime
+toggles, alarm states, and future whole-home modes.
+
+### Spaces panel (v0.5)
+
+A native sidebar panel (custom web component served by the integration,
+HA websocket + services only): area-grouped live overview, expandable
+lifecycle flow strip and priority state ladder with live evidence chips
+and one-tap state testing, deep links into the native options flow. State
+definitions are published as recorder-excluded attributes on the
+experience select — the panel's (and future cards') data contract.
+
 ## Roadmap
 
-1. **Space card (labs-ha-cards):** a planner/viewer — live phase ring,
-   experience picker, timeline of recent transitions, per-state action
-   preview. The "complete experiential planner and state manager and
-   viewer" surface.
+1. **Visual flow editor (labs-ha-cards):** the panel's next act — a
+   node/edge canvas over the same select-attribute data contract: phases
+   and states as nodes, evidence/controls/ambiance as typed edges, drag
+   to retune priorities and timings (writing back through the options
+   flow API), live tokens moving as rooms transition. The Spaces panel
+   ships the read/test surface; the editor makes it authorable.
 2. **Explicit transition rules:** optional guards ("*Sleeping* can only be
    entered from *Winding down*", "never auto-leave *Movie* before 30 min"),
    turning inference into a real state machine when wanted.

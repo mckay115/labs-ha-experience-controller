@@ -1,0 +1,25 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E4",  # imports
+    "E7",  # statements
+    "E9",  # runtime errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # bugbear
+    "SIM", # simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "SIM117", # nested with statements are fine
+    "RUF012", # HA entity class attributes (_attr_options) are idiomatic
+]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components.labs_experience"]
+combine-as-imports = true

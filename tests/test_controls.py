@@ -2,9 +2,8 @@
 
 import asyncio
 
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.labs_experience.config_flow import _async_capture_press
 from custom_components.labs_experience.const import (
@@ -134,6 +133,56 @@ async def test_daypart_restricted_control(hass: HomeAssistant, freezer) -> None:
     await hass.async_block_till_done()
     assert hass.states.get(PHASE).state == "occupied"
     assert hass.states.get(SELECT).state == "Dim night"
+
+
+async def test_toggle_state_control(hass: HomeAssistant) -> None:
+    """One button toggles Work mode on and off."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Office",
+        data={"name": "Office"},
+        options={
+            "presence_entities": ["binary_sensor.office_motion"],
+            "wake_duration": 0,
+            "clear_delay": 30,
+            "pass_through_delay": 5,
+            "cooldown_duration": 5,
+            "states": [
+                {"id": "working", "name": "Working", "priority": 10,
+                 "evidence_entities": ["input_boolean.at_desk"]},
+            ],
+            "controls": [
+                {
+                    "id": "button_single",
+                    "entity_id": "event.office_button",
+                    "trigger": "single",
+                    "command": "toggle_state",
+                    "state_id": "working",
+                },
+            ],
+        },
+    )
+    hass.states.async_set("binary_sensor.office_motion", "on")
+    hass.states.async_set("input_boolean.at_desk", "off")
+    hass.states.async_set(
+        "event.office_button", "2026-01-01T00:00:00+00:00", {"event_type": "initial"}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("select.office_experience").state == "Occupied"
+
+    hass.states.async_set(
+        "event.office_button", "2026-01-01T00:00:05+00:00", {"event_type": "single"}
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("select.office_experience").state == "Working"
+
+    hass.states.async_set(
+        "event.office_button", "2026-01-01T00:00:09+00:00", {"event_type": "single"}
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("select.office_experience").state == "Occupied"
 
 
 async def test_capture_press_bus_event(hass: HomeAssistant) -> None:

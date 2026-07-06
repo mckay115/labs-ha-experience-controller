@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import voluptuous as vol
-
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import entity_platform
+from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+import voluptuous as vol
 
 from . import LabsExperienceConfigEntry
 from .const import (
@@ -46,6 +44,8 @@ class LabsExperienceSelect(LabsSpaceEntity, SelectEntity):
     """The current experience; selecting an option pins it manually."""
 
     _attr_translation_key = "experience"
+    # State definitions feed the Spaces panel; keep them out of history.
+    _unrecorded_attributes = frozenset({"states"})
 
     def __init__(self, engine: SpaceEngine) -> None:
         super().__init__(engine, "experience")
@@ -76,6 +76,18 @@ class LabsExperienceSelect(LabsSpaceEntity, SelectEntity):
             else None,
             "override": self._engine.override_id is not None,
             "since": self._engine.state_since,
+            "states": [
+                {
+                    "id": state.id,
+                    "name": state.name,
+                    "priority": state.priority,
+                    "evidence": state.evidence_entities,
+                    "active": sorted(state.active_states),
+                    "dayparts": state.dayparts,
+                    "hold": state.hold_occupancy,
+                }
+                for state in self._engine.config.selectable_states
+            ],
         }
 
     async def async_select_option(self, option: str) -> None:

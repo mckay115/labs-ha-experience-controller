@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import voluptuous as vol
-
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -15,38 +13,57 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_NAME
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.selector import selector
 from homeassistant.util import slugify
-
-from .state_form import flatten_state_input, state_schema
+import voluptuous as vol
 
 from .const import (
     CLIMATE_INTENT_KEEP,
     CLIMATE_INTENTS,
     COMMAND_SET_STATE,
+    COMMAND_TOGGLE_STATE,
     CONF_ACTIVE_STATES,
+    CONF_AMBIANCE_ENTITY,
+    CONF_AMBIANCE_RULES,
+    CONF_AMBIANCE_STATES,
     CONF_APPLIANCE_ENTITIES,
     CONF_AREA,
     CONF_AUTO_LIGHTING,
+    CONF_BRIGHTNESS_CAP,
     CONF_CIRCADIAN,
     CONF_CLEAR_DELAY,
     CONF_CLIMATE_ENTITIES,
     CONF_CLIMATE_INTENT,
     CONF_COMFORT_TEMP,
+    CONF_CONTROL_ACTIONS,
+    CONF_CONTROL_COMMAND,
+    CONF_CONTROL_ENTITY,
+    CONF_CONTROL_EVENT_DATA,
+    CONF_CONTROL_EVENT_TYPE,
+    CONF_CONTROL_KIND,
+    CONF_CONTROL_STATE,
+    CONF_CONTROL_TRIGGER,
+    CONF_CONTROLS,
+    CONF_COOLDOWN_ACTIONS,
+    CONF_COOLDOWN_DURATION,
     CONF_DAY_START,
     CONF_DAYPARTS,
     CONF_DOOR_SENSORS,
     CONF_ECO_TEMP,
+    CONF_ENTER_ACTIONS,
     CONF_EVENING_START,
+    CONF_EVIDENCE_ENTITIES,
+    CONF_EVIDENCE_MODE,
+    CONF_EXIT_ACTIONS,
+    CONF_HOLD_OCCUPANCY,
     CONF_ILLUMINANCE_SENSOR,
     CONF_LIGHT_BRIGHTNESS,
     CONF_LIGHT_COLOR,
     CONF_LIGHT_EXCLUSIVE,
     CONF_LIGHT_ROLES,
-    CONF_LIGHTS_AMBIENT,
     CONF_LIGHTS_ACCENT,
+    CONF_LIGHTS_AMBIENT,
     CONF_LIGHTS_NIGHT,
     CONF_LIGHTS_TASK,
     CONF_LUX_THRESHOLD,
@@ -58,11 +75,33 @@ from .const import (
     CONF_MIN_KELVIN,
     CONF_MORNING_START,
     CONF_NIGHT_START,
+    CONF_PASS_THROUGH_ACTIONS,
+    CONF_PASS_THROUGH_DELAY,
+    CONF_PRESENCE_ENTITIES,
+    CONF_PRESENCE_MATCH,
+    CONF_PRIORITY,
+    CONF_STATE_ICON,
+    CONF_STATE_ID,
+    CONF_STATE_NAME,
+    CONF_STATES,
     CONF_TARGET_LUX,
+    CONF_VACANT_ACTIONS,
+    CONF_VACANT_BRIGHTNESS,
     CONF_VACANT_CLIMATE,
+    CONF_WAKE_ACTIONS,
+    CONF_WAKE_BRIGHTNESS,
+    CONF_WAKE_DURATION,
     CONF_WINDOW_PAUSE_DELAY,
     CONF_WINDOW_SENSORS,
+    CONTROL_CAPTURE_TIMEOUT,
+    CONTROL_COMMANDS,
+    CONTROL_KIND_BUS,
+    CONTROL_KIND_ENTITY,
+    CONTROLLER_EVENT_TYPES,
+    DEFAULT_ACTIVE_STATES,
+    DEFAULT_CLEAR_DELAY,
     DEFAULT_COMFORT_TEMP,
+    DEFAULT_COOLDOWN_DURATION,
     DEFAULT_DAY_START,
     DEFAULT_ECO_TEMP,
     DEFAULT_EVENING_START,
@@ -74,56 +113,18 @@ from .const import (
     DEFAULT_MIN_KELVIN,
     DEFAULT_MORNING_START,
     DEFAULT_NIGHT_START,
+    DEFAULT_PASS_THROUGH_DELAY,
     DEFAULT_TARGET_LUX,
     DEFAULT_VACANT_CLIMATE,
-    DEFAULT_WINDOW_PAUSE_DELAY,
-    LIGHT_COLOR_CIRCADIAN,
-    LIGHT_COLOR_MODES,
-    LIGHT_ROLES,
-    Daypart,
-    CONF_CONTROL_ACTIONS,
-    CONF_CONTROL_COMMAND,
-    CONF_CONTROL_ENTITY,
-    CONF_CONTROL_EVENT_DATA,
-    CONF_CONTROL_EVENT_TYPE,
-    CONF_CONTROL_KIND,
-    CONF_CONTROL_STATE,
-    CONF_CONTROL_TRIGGER,
-    CONF_CONTROLS,
-    CONTROL_CAPTURE_TIMEOUT,
-    CONTROL_KIND_BUS,
-    CONTROL_KIND_ENTITY,
-    CONTROLLER_EVENT_TYPES,
-    CONF_COOLDOWN_ACTIONS,
-    CONF_COOLDOWN_DURATION,
-    CONF_ENTER_ACTIONS,
-    CONF_EVIDENCE_ENTITIES,
-    CONF_EVIDENCE_MODE,
-    CONF_EXIT_ACTIONS,
-    CONF_HOLD_OCCUPANCY,
-    CONF_PASS_THROUGH_ACTIONS,
-    CONF_PASS_THROUGH_DELAY,
-    CONF_PRESENCE_ENTITIES,
-    CONF_PRESENCE_MATCH,
-    CONF_PRIORITY,
-    CONF_STATE_ICON,
-    CONF_STATE_ID,
-    CONF_STATE_NAME,
-    CONF_STATES,
-    CONF_VACANT_ACTIONS,
-    CONF_WAKE_ACTIONS,
-    CONF_WAKE_DURATION,
-    CONTROL_COMMANDS,
-    DEFAULT_ACTIVE_STATES,
-    DEFAULT_CLEAR_DELAY,
-    DEFAULT_COOLDOWN_DURATION,
-    DEFAULT_PASS_THROUGH_DELAY,
     DEFAULT_WAKE_DURATION,
+    DEFAULT_WINDOW_PAUSE_DELAY,
     DOMAIN,
-    EVIDENCE_MODE_ALL,
     EVIDENCE_MODE_ANY,
+    LIGHT_COLOR_CIRCADIAN,
     TRIGGER_ANY,
+    Daypart,
 )
+from .state_form import flatten_state_input, state_schema
 
 PRESENCE_DOMAINS = [
     "binary_sensor",
@@ -366,6 +367,66 @@ def _climate_schema(defaults: dict[str, Any]) -> vol.Schema:
     )
 
 
+def _ambiance_schema(defaults: dict[str, Any]) -> vol.Schema:
+    def opt_pct(key: str) -> Any:
+        return vol.Optional(key, description={"suggested_value": defaults.get(key)})
+
+    pct = selector(
+        {"number": {"min": 1, "max": 100, "unit_of_measurement": "%", "mode": "box"}}
+    )
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_AMBIANCE_ENTITY,
+                description={"suggested_value": defaults.get(CONF_AMBIANCE_ENTITY)},
+            ): selector({"entity": {}}),
+            vol.Required(
+                CONF_AMBIANCE_STATES,
+                default=defaults.get(CONF_AMBIANCE_STATES, "media"),
+            ): selector({"text": {}}),
+            vol.Required(
+                CONF_PRIORITY, default=int(defaults.get(CONF_PRIORITY, 0))
+            ): selector(
+                {"number": {"min": -1000, "max": 1000, "step": 1, "mode": "box"}}
+            ),
+            opt_pct(CONF_BRIGHTNESS_CAP): pct,
+            opt_pct(CONF_VACANT_BRIGHTNESS): pct,
+            opt_pct(CONF_WAKE_BRIGHTNESS): pct,
+        }
+    )
+
+
+def _ambiance_from_input(user_input: dict[str, Any], rule_id: str) -> dict[str, Any]:
+    def opt_int(key: str) -> int | None:
+        value = user_input.get(key)
+        return int(value) if value is not None else None
+
+    return {
+        CONF_STATE_ID: rule_id,
+        CONF_AMBIANCE_ENTITY: user_input[CONF_AMBIANCE_ENTITY],
+        CONF_AMBIANCE_STATES: user_input.get(CONF_AMBIANCE_STATES, "media"),
+        CONF_PRIORITY: int(user_input.get(CONF_PRIORITY, 0)),
+        CONF_BRIGHTNESS_CAP: opt_int(CONF_BRIGHTNESS_CAP),
+        CONF_VACANT_BRIGHTNESS: opt_int(CONF_VACANT_BRIGHTNESS),
+        CONF_WAKE_BRIGHTNESS: opt_int(CONF_WAKE_BRIGHTNESS),
+    }
+
+
+def _ambiance_label(rule: dict[str, Any]) -> str:
+    parts = []
+    if rule.get(CONF_BRIGHTNESS_CAP):
+        parts.append(f"cap {rule[CONF_BRIGHTNESS_CAP]}%")
+    if rule.get(CONF_VACANT_BRIGHTNESS):
+        parts.append(f"glow {rule[CONF_VACANT_BRIGHTNESS]}%")
+    if rule.get(CONF_WAKE_BRIGHTNESS):
+        parts.append(f"wake {rule[CONF_WAKE_BRIGHTNESS]}%")
+    effect = ", ".join(parts) or "no effect"
+    return (
+        f"{rule.get(CONF_AMBIANCE_ENTITY)} = "
+        f"{rule.get(CONF_AMBIANCE_STATES)} → {effect}"
+    )
+
+
 STARTER_HANGING_OUT = "hanging_out"
 STARTER_MEDIA = "media"
 STARTER_WORKING = "working"
@@ -605,9 +666,10 @@ def _control_from_input(user_input: dict[str, Any], control_id: str) -> dict[str
 
 
 def _command_needs_state(user_input: dict[str, Any]) -> bool:
-    return user_input.get(
-        CONF_CONTROL_COMMAND, COMMAND_SET_STATE
-    ) == COMMAND_SET_STATE and not user_input.get(CONF_CONTROL_STATE)
+    return user_input.get(CONF_CONTROL_COMMAND, COMMAND_SET_STATE) in (
+        COMMAND_SET_STATE,
+        COMMAND_TOGGLE_STATE,
+    ) and not user_input.get(CONF_CONTROL_STATE)
 
 
 def _control_label(control: dict[str, Any]) -> str:
@@ -837,6 +899,7 @@ class LabsExperienceOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         self._edit_state_id: str | None = None
         self._edit_control_id: str | None = None
+        self._edit_ambiance_id: str | None = None
         self._capture_task: asyncio.Task[dict[str, Any] | None] | None = None
         self._captured: dict[str, Any] | None = None
 
@@ -867,14 +930,125 @@ class LabsExperienceOptionsFlow(OptionsFlow):
             ],
         )
 
+    def _ambiance_rules(self) -> list[dict[str, Any]]:
+        return [
+            dict(rule)
+            for rule in self.config_entry.options.get(CONF_AMBIANCE_RULES, [])
+        ]
+
     async def async_step_profile_menu(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         menu = ["profile"]
         if self._options.get(CONF_AREA):
             menu.append("fill_from_area")
-        menu += ["lighting_settings", "climate_settings"]
+        menu += ["lighting_settings", "climate_settings", "add_ambiance"]
+        if self._ambiance_rules():
+            menu += ["edit_ambiance", "remove_ambiance"]
         return self.async_show_menu(step_id="profile_menu", menu_options=menu)
+
+    async def async_step_add_ambiance(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            rules = self._ambiance_rules()
+            base = (
+                slugify(
+                    f"{user_input[CONF_AMBIANCE_ENTITY]}_"
+                    f"{user_input.get(CONF_AMBIANCE_STATES, '')}"
+                )
+                or "ambiance"
+            )
+            rule_id = _unique_control_id(rules, base)
+            rules.append(_ambiance_from_input(user_input, rule_id))
+            options = self._options
+            options[CONF_AMBIANCE_RULES] = rules
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="add_ambiance", data_schema=_ambiance_schema({})
+        )
+
+    async def async_step_edit_ambiance(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            self._edit_ambiance_id = user_input["rule"]
+            return await self.async_step_edit_ambiance_form()
+        schema = vol.Schema(
+            {
+                vol.Required("rule"): selector(
+                    {
+                        "select": {
+                            "options": [
+                                {
+                                    "value": rule[CONF_STATE_ID],
+                                    "label": _ambiance_label(rule),
+                                }
+                                for rule in self._ambiance_rules()
+                            ]
+                        }
+                    }
+                )
+            }
+        )
+        return self.async_show_form(step_id="edit_ambiance", data_schema=schema)
+
+    async def async_step_edit_ambiance_form(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        rules = self._ambiance_rules()
+        current = next(
+            (
+                rule
+                for rule in rules
+                if rule[CONF_STATE_ID] == self._edit_ambiance_id
+            ),
+            None,
+        )
+        if current is None:
+            return self.async_abort(reason="rule_not_found")
+        if user_input is not None:
+            updated = _ambiance_from_input(user_input, current[CONF_STATE_ID])
+            options = self._options
+            options[CONF_AMBIANCE_RULES] = [
+                updated if rule[CONF_STATE_ID] == current[CONF_STATE_ID] else rule
+                for rule in rules
+            ]
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="edit_ambiance_form", data_schema=_ambiance_schema(current)
+        )
+
+    async def async_step_remove_ambiance(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        rules = self._ambiance_rules()
+        if user_input is not None:
+            to_remove = set(user_input.get("rules", []))
+            options = self._options
+            options[CONF_AMBIANCE_RULES] = [
+                rule for rule in rules if rule[CONF_STATE_ID] not in to_remove
+            ]
+            return self.async_create_entry(title="", data=options)
+        schema = vol.Schema(
+            {
+                vol.Required("rules", default=[]): selector(
+                    {
+                        "select": {
+                            "options": [
+                                {
+                                    "value": rule[CONF_STATE_ID],
+                                    "label": _ambiance_label(rule),
+                                }
+                                for rule in rules
+                            ],
+                            "multiple": True,
+                        }
+                    }
+                )
+            }
+        )
+        return self.async_show_form(step_id="remove_ambiance", data_schema=schema)
 
     async def async_step_states_menu(
         self, user_input: dict[str, Any] | None = None

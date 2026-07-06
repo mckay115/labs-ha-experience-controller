@@ -19,7 +19,6 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.helpers.event import async_call_later
-
 from homeassistant.util import dt as dt_util
 
 from .circadian import circadian_targets
@@ -39,7 +38,7 @@ from .const import (
     Daypart,
     Phase,
 )
-from .models import ExperienceState, LightingSpec
+from .models import AmbianceRule, ExperienceState, LightingSpec
 
 if TYPE_CHECKING:
     from .engine import SpaceEngine
@@ -62,6 +61,7 @@ class LightingFacet:
         self._current_spec: LightingSpec | None = None
         self._hold_cancel: CALLBACK_TYPE | None = None
         self._last_lux_adjust: datetime | None = None
+        self._ambiance_id: str | None = None
 
     @property
     def active(self) -> bool:
@@ -139,10 +139,26 @@ class LightingFacet:
             f"labs_experience {self.engine.config.name} light.{service}",
         )
 
+    @property
+    def active_ambiance(self) -> AmbianceRule | None:
+        """The highest-priority ambiance rule currently matching."""
+        best: AmbianceRule | None = None
+        for rule in self.engine.config.ambiance_rules:
+            state = self.engine.hass.states.get(rule.entity_id)
+            if state is None or state.state.lower() not in rule.states:
+                continue
+            if best is None or rule.priority > best.priority:
+                best = rule
+        return best
+
     def _turn_on(
         self, entity_ids: list[str], brightness: int | None, kelvin: int | None
     ) -> None:
         """Turn on lights with only the attributes each supports."""
+        if brightness is not None:
+            rule = self.active_ambiance
+            if rule and rule.brightness_cap:
+                brightness = min(brightness, rule.brightness_cap)
         for entity_id in entity_ids:
             state = self.engine.hass.states.get(entity_id)
             modes = (
@@ -193,19 +209,27 @@ class LightingFacet:
 
     # ------------------------------------------------------------ engine hooks
 
+    def _glow_roles(self) -> list[str]:
+        config = self.engine.config
+        if config.lights.get(LIGHT_ROLE_NIGHT):
+            return [LIGHT_ROLE_NIGHT]
+        return [LIGHT_ROLE_AMBIENT]
+
     @callback
     def on_wake(self) -> None:
         """Built-in gentle acknowledgement (no wake actions configured)."""
         if not self.active or not self._is_dark():
             return
-        config = self.engine.config
-        roles = (
-            [LIGHT_ROLE_NIGHT]
-            if config.lights.get(LIGHT_ROLE_NIGHT)
-            else [LIGHT_ROLE_AMBIENT]
+        rule = self.active_ambiance
+        brightness = (
+            rule.wake_brightness
+            if rule and rule.wake_brightness
+            else WAKE_BRIGHTNESS
         )
         self.apply_spec(
-            LightingSpec(roles=roles, brightness=WAKE_BRIGHTNESS, exclusive=False)
+            LightingSpec(
+                roles=self._glow_roles(), brightness=brightness, exclusive=False
+            )
         )
 
     @callback
@@ -237,11 +261,49 @@ class LightingFacet:
 
     @callback
     def on_vacant(self, *, actions_ran: bool) -> None:
-        """Vacancy always releases manual; defaults turn the room off."""
+        """Vacancy always releases manual; defaults turn the room off —
+        or down to the ambiance glow when a neighbor's activity asks."""
         self.set_authority(Authority.AUTO, reapply=False)
         self._current_spec = None
         if self.active and not actions_ran:
-            self._call("turn_off", self.engine.config.all_profile_lights)
+            self._apply_vacant_default()
+
+    @callback
+    def _apply_vacant_default(self) -> None:
+        config = self.engine.config
+        rule = self.active_ambiance
+        if rule and rule.vacant_brightness:
+            glow = config.role_lights(self._glow_roles())
+            self._turn_on(glow, rule.vacant_brightness, config.min_kelvin)
+            self._call(
+                "turn_off",
+                [
+                    entity_id
+                    for entity_id in config.all_profile_lights
+                    if entity_id not in glow
+                ],
+            )
+        else:
+            self._call("turn_off", config.all_profile_lights)
+
+    @callback
+    def on_ambiance_event(self) -> None:
+        """An ambiance entity changed; re-shape the room live."""
+        rule = self.active_ambiance
+        rule_id = rule.id if rule else None
+        if rule_id == self._ambiance_id:
+            return
+        self._ambiance_id = rule_id
+        self.engine.async_notify()
+        if not self.active or self.authority is Authority.MANUAL:
+            return
+        phase = self.engine.phase
+        if phase is Phase.OCCUPIED and self._current_spec is not None:
+            # Re-assert the current experience under the new constraints
+            # (dim down for the movie, restore when it ends).
+            self.apply_spec(self._current_spec)
+        elif phase is Phase.VACANT and not self.engine.config.vacant_actions:
+            self._apply_vacant_default()
 
     @callback
     def on_tick(self) -> None:
@@ -307,6 +369,9 @@ class LightingFacet:
         step = round(error / config.target_lux * 30)
         step = max(-LUX_MAX_STEP, min(LUX_MAX_STEP, step))
         if step == 0:
+            return
+        if step > 0 and (rule := self.active_ambiance) and rule.brightness_cap:
+            # Never brighten against an ambiance cap (movie next door).
             return
         on_lights = self._on_lights(config.role_lights(spec.roles))
         if not on_lights:
@@ -399,9 +464,11 @@ class LightingFacet:
         self.set_authority(Authority.MANUAL)
 
     def snapshot(self) -> dict:
+        rule = self.active_ambiance
         return {
             "authority": self.authority.value,
             "circadian_enabled": self.circadian_enabled,
+            "ambiance": rule.id if rule else None,
             "current_spec": {
                 "roles": self._current_spec.roles,
                 "brightness": self._current_spec.brightness,

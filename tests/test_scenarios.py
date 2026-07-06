@@ -2,12 +2,11 @@
 
 from datetime import timedelta
 
+from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
 )
-
-from homeassistant.core import HomeAssistant
 
 from custom_components.labs_experience.const import DOMAIN
 
