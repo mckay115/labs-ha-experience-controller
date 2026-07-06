@@ -175,34 +175,60 @@
       },
       "add_state": {
         "title": "Add an experience state",
+        "description": "Only a name is required — expand the sections below for matching, comfort, and actions.",
         "data": {
           "name": "Name",
           "icon": "Icon",
-          "priority": "Priority",
-          "evidence_entities": "Evidence entities",
-          "evidence_mode": "Evidence mode",
-          "active_states": "Active states",
-          "hold_occupancy": "Hold occupancy while evidence is active",
-          "dayparts": "Limit to dayparts",
-          "light_roles": "Light roles",
-          "light_brightness": "Brightness",
-          "light_color": "Color",
-          "light_exclusive": "Turn other profile lights off",
-          "climate_intent": "Climate",
-          "enter_actions": "Enter actions",
-          "exit_actions": "Exit actions"
+          "priority": "Priority"
         },
         "data_description": {
-          "priority": "When several states match, the highest priority wins.",
-          "evidence_entities": "Entities whose state indicates this experience. Leave empty to make this the baseline state.",
-          "active_states": "Comma-separated entity states that count as active evidence.",
-          "hold_occupancy": "Keep the space occupied while this state's evidence is active, even if motion stops — perfect for movie night.",
-          "dayparts": "Only match during these dayparts. Empty means always.",
-          "light_roles": "Which profile lights this state turns on. Empty leaves lighting to enter actions or the built-in baseline.",
-          "light_brightness": "Fixed brightness for this state. Empty follows the circadian curve.",
-          "climate_intent": "Comfort intent applied when this state becomes active.",
-          "enter_actions": "Runs when the space enters this state.",
-          "exit_actions": "Runs when the space leaves this state."
+          "priority": "When several states match, the highest priority wins."
+        },
+        "sections": {
+          "evidence": {
+            "name": "Evidence & matching",
+            "description": "What tells the space this experience is happening.",
+            "data": {
+              "evidence_entities": "Evidence entities",
+              "evidence_mode": "Evidence mode",
+              "active_states": "Active states",
+              "hold_occupancy": "Hold occupancy while evidence is active",
+              "dayparts": "Limit to dayparts"
+            },
+            "data_description": {
+              "evidence_entities": "Entities whose state indicates this experience. Leave empty to make this the baseline state.",
+              "active_states": "Comma-separated entity states that count as active evidence.",
+              "hold_occupancy": "Keep the space occupied while this state's evidence is active, even if motion stops — perfect for movie night.",
+              "dayparts": "Only match during these dayparts. Empty means always."
+            }
+          },
+          "comfort": {
+            "name": "Lighting & climate",
+            "description": "What the space does while this experience is active.",
+            "data": {
+              "light_roles": "Light roles",
+              "light_brightness": "Brightness",
+              "light_color": "Color",
+              "light_exclusive": "Turn other profile lights off",
+              "climate_intent": "Climate"
+            },
+            "data_description": {
+              "light_roles": "Which profile lights this state turns on. Empty leaves lighting to enter actions or the built-in baseline.",
+              "light_brightness": "Fixed brightness for this state. Empty follows the circadian curve.",
+              "climate_intent": "Comfort intent applied when this state becomes active."
+            }
+          },
+          "actions": {
+            "name": "Custom actions",
+            "data": {
+              "enter_actions": "Enter actions",
+              "exit_actions": "Exit actions"
+            },
+            "data_description": {
+              "enter_actions": "Runs when the space enters this state.",
+              "exit_actions": "Runs when the space leaves this state."
+            }
+          }
         }
       },
       "edit_state": {
@@ -213,34 +239,60 @@
       },
       "edit_state_form": {
         "title": "Edit an experience state",
+        "description": "Only a name is required — expand the sections below for matching, comfort, and actions.",
         "data": {
           "name": "Name",
           "icon": "Icon",
-          "priority": "Priority",
-          "evidence_entities": "Evidence entities",
-          "evidence_mode": "Evidence mode",
-          "active_states": "Active states",
-          "hold_occupancy": "Hold occupancy while evidence is active",
-          "dayparts": "Limit to dayparts",
-          "light_roles": "Light roles",
-          "light_brightness": "Brightness",
-          "light_color": "Color",
-          "light_exclusive": "Turn other profile lights off",
-          "climate_intent": "Climate",
-          "enter_actions": "Enter actions",
-          "exit_actions": "Exit actions"
+          "priority": "Priority"
         },
         "data_description": {
-          "priority": "When several states match, the highest priority wins.",
-          "evidence_entities": "Entities whose state indicates this experience. Leave empty to make this the baseline state.",
-          "active_states": "Comma-separated entity states that count as active evidence.",
-          "hold_occupancy": "Keep the space occupied while this state's evidence is active, even if motion stops — perfect for movie night.",
-          "dayparts": "Only match during these dayparts. Empty means always.",
-          "light_roles": "Which profile lights this state turns on. Empty leaves lighting to enter actions or the built-in baseline.",
-          "light_brightness": "Fixed brightness for this state. Empty follows the circadian curve.",
-          "climate_intent": "Comfort intent applied when this state becomes active.",
-          "enter_actions": "Runs when the space enters this state.",
-          "exit_actions": "Runs when the space leaves this state."
+          "priority": "When several states match, the highest priority wins."
+        },
+        "sections": {
+          "evidence": {
+            "name": "Evidence & matching",
+            "description": "What tells the space this experience is happening.",
+            "data": {
+              "evidence_entities": "Evidence entities",
+              "evidence_mode": "Evidence mode",
+              "active_states": "Active states",
+              "hold_occupancy": "Hold occupancy while evidence is active",
+              "dayparts": "Limit to dayparts"
+            },
+            "data_description": {
+              "evidence_entities": "Entities whose state indicates this experience. Leave empty to make this the baseline state.",
+              "active_states": "Comma-separated entity states that count as active evidence.",
+              "hold_occupancy": "Keep the space occupied while this state's evidence is active, even if motion stops — perfect for movie night.",
+              "dayparts": "Only match during these dayparts. Empty means always."
+            }
+          },
+          "comfort": {
+            "name": "Lighting & climate",
+            "description": "What the space does while this experience is active.",
+            "data": {
+              "light_roles": "Light roles",
+              "light_brightness": "Brightness",
+              "light_color": "Color",
+              "light_exclusive": "Turn other profile lights off",
+              "climate_intent": "Climate"
+            },
+            "data_description": {
+              "light_roles": "Which profile lights this state turns on. Empty leaves lighting to enter actions or the built-in baseline.",
+              "light_brightness": "Fixed brightness for this state. Empty follows the circadian curve.",
+              "climate_intent": "Comfort intent applied when this state becomes active."
+            }
+          },
+          "actions": {
+            "name": "Custom actions",
+            "data": {
+              "enter_actions": "Enter actions",
+              "exit_actions": "Exit actions"
+            },
+            "data_description": {
+              "enter_actions": "Runs when the space enters this state.",
+              "exit_actions": "Runs when the space leaves this state."
+            }
+          }
         }
       },
       "remove_states": {

@@ -69,6 +69,53 @@ async def test_starter_states_quick_start(hass: HomeAssistant) -> None:
     assert {"Hanging out", "Media", "Night light"} <= set(options)
 
 
+async def test_add_custom_state_sectioned_form(hass: HomeAssistant) -> None:
+    """The sectioned state form stores the same flat shape as before."""
+    hass.states.async_set("binary_sensor.motion", "off")
+    entry = make_den()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "states_menu"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_state"}
+    )
+    assert result["type"] == "form"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "name": "Reading",
+            "priority": 15,
+            "evidence": {
+                "evidence_entities": ["switch.reading_lamp"],
+                "dayparts": ["evening", "night"],
+                "hold_occupancy": False,
+            },
+            "comfort": {
+                "light_roles": ["accent"],
+                "light_color": "warm",
+            },
+            "actions": {},
+        },
+    )
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+
+    stored = {state["id"]: state for state in entry.options["states"]}["reading"]
+    assert stored["name"] == "Reading"
+    assert stored["priority"] == 15
+    assert stored["evidence_entities"] == ["switch.reading_lamp"]
+    assert stored["dayparts"] == ["evening", "night"]
+    assert stored["light_roles"] == ["accent"]
+    assert stored["light_color"] == "warm"
+    assert "evidence" not in stored
+
+
 async def test_starter_media_requires_player(hass: HomeAssistant) -> None:
     entry = make_den()
     entry.add_to_hass(hass)

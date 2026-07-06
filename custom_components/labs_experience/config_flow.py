@@ -20,6 +20,8 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import selector
 from homeassistant.util import slugify
 
+from .state_form import flatten_state_input, state_schema
+
 from .const import (
     CLIMATE_INTENT_KEEP,
     CLIMATE_INTENTS,
@@ -488,105 +490,7 @@ def _classify_area(hass: HomeAssistant, area_id: str) -> dict[str, Any]:
 
 
 def _state_schema(defaults: dict[str, Any]) -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(
-                CONF_STATE_NAME, default=defaults.get(CONF_STATE_NAME, "")
-            ): selector({"text": {}}),
-            vol.Optional(
-                CONF_STATE_ICON,
-                description={"suggested_value": defaults.get(CONF_STATE_ICON)},
-            ): selector({"icon": {}}),
-            vol.Required(
-                CONF_PRIORITY, default=int(defaults.get(CONF_PRIORITY, 0))
-            ): selector({"number": {"min": -1000, "max": 1000, "step": 1, "mode": "box"}}),
-            vol.Optional(
-                CONF_EVIDENCE_ENTITIES,
-                default=list(defaults.get(CONF_EVIDENCE_ENTITIES, [])),
-            ): selector({"entity": {"multiple": True}}),
-            vol.Required(
-                CONF_EVIDENCE_MODE,
-                default=defaults.get(CONF_EVIDENCE_MODE, EVIDENCE_MODE_ANY),
-            ): selector(
-                {
-                    "select": {
-                        "options": [EVIDENCE_MODE_ANY, EVIDENCE_MODE_ALL],
-                        "translation_key": "evidence_mode",
-                    }
-                }
-            ),
-            vol.Required(
-                CONF_ACTIVE_STATES,
-                default=defaults.get(CONF_ACTIVE_STATES, DEFAULT_ACTIVE_STATES),
-            ): selector({"text": {}}),
-            vol.Required(
-                CONF_HOLD_OCCUPANCY,
-                default=bool(defaults.get(CONF_HOLD_OCCUPANCY, False)),
-            ): selector({"boolean": {}}),
-            vol.Optional(
-                CONF_DAYPARTS, default=list(defaults.get(CONF_DAYPARTS, []))
-            ): selector(
-                {
-                    "select": {
-                        "options": [daypart.value for daypart in Daypart],
-                        "multiple": True,
-                        "translation_key": "dayparts",
-                    }
-                }
-            ),
-            vol.Optional(
-                CONF_LIGHT_ROLES, default=list(defaults.get(CONF_LIGHT_ROLES, []))
-            ): selector(
-                {
-                    "select": {
-                        "options": list(LIGHT_ROLES),
-                        "multiple": True,
-                        "translation_key": "light_roles",
-                    }
-                }
-            ),
-            vol.Optional(
-                CONF_LIGHT_BRIGHTNESS,
-                description={"suggested_value": defaults.get(CONF_LIGHT_BRIGHTNESS)},
-            ): selector(
-                {"number": {"min": 1, "max": 100, "unit_of_measurement": "%", "mode": "box"}}
-            ),
-            vol.Required(
-                CONF_LIGHT_COLOR,
-                default=defaults.get(CONF_LIGHT_COLOR, LIGHT_COLOR_CIRCADIAN),
-            ): selector(
-                {
-                    "select": {
-                        "options": list(LIGHT_COLOR_MODES),
-                        "translation_key": "light_color",
-                    }
-                }
-            ),
-            vol.Required(
-                CONF_LIGHT_EXCLUSIVE,
-                default=bool(defaults.get(CONF_LIGHT_EXCLUSIVE, True)),
-            ): selector({"boolean": {}}),
-            vol.Required(
-                CONF_CLIMATE_INTENT,
-                default=defaults.get(CONF_CLIMATE_INTENT, CLIMATE_INTENT_KEEP),
-            ): selector(
-                {
-                    "select": {
-                        "options": list(CLIMATE_INTENTS),
-                        "translation_key": "climate_intent",
-                    }
-                }
-            ),
-            vol.Optional(
-                CONF_ENTER_ACTIONS,
-                description={"suggested_value": defaults.get(CONF_ENTER_ACTIONS)},
-            ): selector({"action": {}}),
-            vol.Optional(
-                CONF_EXIT_ACTIONS,
-                description={"suggested_value": defaults.get(CONF_EXIT_ACTIONS)},
-            ): selector({"action": {}}),
-        }
-    )
+    return state_schema(defaults)
 
 
 def _state_from_input(user_input: dict[str, Any], state_id: str) -> dict[str, Any]:
@@ -1143,6 +1047,7 @@ class LabsExperienceOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
+            user_input = flatten_state_input(user_input)
             states = self._states()
             existing_ids = {state[CONF_STATE_ID] for state in states}
             base = slugify(user_input[CONF_STATE_NAME]) or "state"
@@ -1193,6 +1098,7 @@ class LabsExperienceOptionsFlow(OptionsFlow):
         if current is None:
             return self.async_abort(reason="state_not_found")
         if user_input is not None:
+            user_input = flatten_state_input(user_input)
             updated = _state_from_input(user_input, current[CONF_STATE_ID])
             options = self._options
             options[CONF_STATES] = [
