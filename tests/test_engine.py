@@ -207,6 +207,21 @@ async def test_control_wakes_vacant_space(hass: HomeAssistant, freezer) -> None:
     assert select_state.attributes["override"] is True
 
 
+async def test_evidence_fast_track_skips_waking(
+    hass: HomeAssistant, freezer
+) -> None:
+    """Walking in mid-movie snaps straight to the Media experience."""
+    await setup_space(hass)
+    hass.states.async_set("media_player.tv", "playing")
+    await hass.async_block_till_done()
+    assert hass.states.get(PHASE).state == "vacant"
+
+    hass.states.async_set("binary_sensor.motion", "on")
+    await hass.async_block_till_done()
+    assert hass.states.get(PHASE).state == "occupied"
+    assert hass.states.get(SELECT).state == "Watching TV"
+
+
 async def test_adopts_existing_presence_on_startup(
     hass: HomeAssistant, freezer
 ) -> None:

@@ -72,24 +72,21 @@ the per-space *extra presence states* field.
 Copy `custom_components/labs_experience` into your config's
 `custom_components` folder and restart.
 
-## Quick start: a living room in five minutes
+## Quick start: a living room in two minutes
 
 1. **Settings → Devices & services → Add integration → Labs Experience
-   Controller.** Name it *Living Room*, pick the area, select your motion /
-   occupancy / mmWave sensors, keep the default timings.
-2. Open the entry's **Configure** menu:
-   - **Add an experience state** → *Hanging out*: no evidence entities
-     (baseline), priority 0, enter actions = comfortable lighting scene.
-   - **Add an experience state** → *Watching TV*: evidence =
-     `media_player.living_room_tv`, priority 10, **hold occupancy on**,
-     enter actions = movie lighting, exit actions = restore.
-   - **Wake, cool-down, vacant & pass-through actions** → wake = dim lamp
-     to 20%; cool-down = fade to 40%; vacant = lights off.
-   - **Add a control** → your remote's `event` entity, trigger `single`,
-     command *Cycle through experience states*.
-3. Walk in: the lamp dims up (waking) → full scene (occupied, *Hanging
-   out*). Start the TV: movie lighting, and the room stays occupied for the
-   whole film. Turn the TV off and leave: fade down, lights off.
+   Controller.** Name it *Living Room* and pick its area — presence
+   sensors and the room profile fill themselves from the area.
+2. **Configure → Experience states → Add common states.** Pick *Hanging
+   out*, *Media*, and *Night light*, confirm the TV. Done.
+3. Walk in: gentle acknowledgement (night light when dark) → circadian
+   ambient (*Hanging out*) — and if the TV is already playing, the room
+   recognizes you instantly and goes straight to *Media*. Movies hold the
+   room occupied through motionless stretches; leaving fades down and
+   turns off. Touch any wall switch and the engine hands you the lights
+   without losing the experience state.
+4. Optional: **Controls → Add a control by pressing it** — press your
+   remote, pick a command, done.
 
 ## Room profile & habitat intelligence
 

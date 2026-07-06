@@ -364,6 +364,78 @@ def _climate_schema(defaults: dict[str, Any]) -> vol.Schema:
     )
 
 
+STARTER_HANGING_OUT = "hanging_out"
+STARTER_MEDIA = "media"
+STARTER_WORKING = "working"
+STARTER_NIGHT_LIGHT = "night_light"
+STARTER_TEMPLATES = [
+    STARTER_HANGING_OUT,
+    STARTER_MEDIA,
+    STARTER_WORKING,
+    STARTER_NIGHT_LIGHT,
+]
+
+
+def _starter_states(
+    selected: list[str], media_entity: str | None, work_entity: str | None
+) -> list[dict[str, Any]]:
+    """Pre-tuned experience states so a fresh space is smart in one visit."""
+    states: list[dict[str, Any]] = []
+    if STARTER_HANGING_OUT in selected:
+        states.append(
+            {
+                CONF_STATE_ID: STARTER_HANGING_OUT,
+                CONF_STATE_NAME: "Hanging out",
+                CONF_STATE_ICON: "mdi:sofa",
+                CONF_PRIORITY: 0,
+                CONF_LIGHT_ROLES: ["ambient"],
+                CONF_LIGHT_COLOR: LIGHT_COLOR_CIRCADIAN,
+            }
+        )
+    if STARTER_MEDIA in selected:
+        states.append(
+            {
+                CONF_STATE_ID: STARTER_MEDIA,
+                CONF_STATE_NAME: "Media",
+                CONF_STATE_ICON: "mdi:television-play",
+                CONF_PRIORITY: 20,
+                CONF_EVIDENCE_ENTITIES: [media_entity],
+                CONF_ACTIVE_STATES: "playing,buffering",
+                CONF_HOLD_OCCUPANCY: True,
+                CONF_LIGHT_ROLES: ["ambient"],
+                CONF_LIGHT_BRIGHTNESS: 20,
+                CONF_LIGHT_COLOR: "warm",
+            }
+        )
+    if STARTER_WORKING in selected:
+        states.append(
+            {
+                CONF_STATE_ID: STARTER_WORKING,
+                CONF_STATE_NAME: "Working",
+                CONF_STATE_ICON: "mdi:desk",
+                CONF_PRIORITY: 10,
+                CONF_EVIDENCE_ENTITIES: [work_entity],
+                CONF_LIGHT_ROLES: ["ambient", "task"],
+                CONF_LIGHT_BRIGHTNESS: 100,
+                CONF_LIGHT_COLOR: "cool",
+            }
+        )
+    if STARTER_NIGHT_LIGHT in selected:
+        states.append(
+            {
+                CONF_STATE_ID: STARTER_NIGHT_LIGHT,
+                CONF_STATE_NAME: "Night light",
+                CONF_STATE_ICON: "mdi:weather-night",
+                CONF_PRIORITY: 5,
+                CONF_DAYPARTS: ["night"],
+                CONF_LIGHT_ROLES: ["night"],
+                CONF_LIGHT_BRIGHTNESS: 10,
+                CONF_LIGHT_COLOR: "warm",
+            }
+        )
+    return states
+
+
 def _classify_area(hass: HomeAssistant, area_id: str) -> dict[str, Any]:
     """Build profile assignments from an area's entities."""
     ent_reg = er.async_get(hass)
@@ -880,16 +952,93 @@ class LabsExperienceOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        menu = ["basics", "profile"]
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=[
+                "basics",
+                "profile_menu",
+                "states_menu",
+                "controls_menu",
+                "phase_actions",
+            ],
+        )
+
+    async def async_step_profile_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        menu = ["profile"]
         if self._options.get(CONF_AREA):
             menu.append("fill_from_area")
-        menu += ["lighting_settings", "climate_settings", "phase_actions", "add_state"]
+        menu += ["lighting_settings", "climate_settings"]
+        return self.async_show_menu(step_id="profile_menu", menu_options=menu)
+
+    async def async_step_states_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        menu = ["add_starter_states", "add_state"]
         if self._states():
             menu += ["edit_state", "remove_states"]
-        menu += ["discover_control", "add_control"]
+        return self.async_show_menu(step_id="states_menu", menu_options=menu)
+
+    async def async_step_controls_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        menu = ["discover_control", "add_control"]
         if self._controls():
             menu += ["edit_control", "remove_controls"]
-        return self.async_show_menu(step_id="init", menu_options=menu)
+        return self.async_show_menu(step_id="controls_menu", menu_options=menu)
+
+    async def async_step_add_starter_states(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        states = self._states()
+        existing = {state[CONF_STATE_ID] for state in states}
+        available = [
+            template for template in STARTER_TEMPLATES if template not in existing
+        ]
+        if user_input is not None:
+            selected = [
+                template
+                for template in user_input.get("templates", [])
+                if template in available
+            ]
+            media_entity = user_input.get("media_entity")
+            work_entity = user_input.get("work_entity")
+            if not selected:
+                errors["base"] = "no_templates"
+            elif STARTER_MEDIA in selected and not media_entity:
+                errors["base"] = "media_entity_required"
+            elif STARTER_WORKING in selected and not work_entity:
+                errors["base"] = "work_entity_required"
+            else:
+                options = self._options
+                options[CONF_STATES] = states + _starter_states(
+                    selected, media_entity, work_entity
+                )
+                return self.async_create_entry(title="", data=options)
+        suggested_media = (self._options.get(CONF_MEDIA_ENTITIES) or [None])[0]
+        schema = vol.Schema(
+            {
+                vol.Required("templates", default=list(available)): selector(
+                    {
+                        "select": {
+                            "options": list(STARTER_TEMPLATES),
+                            "multiple": True,
+                            "translation_key": "starter_templates",
+                        }
+                    }
+                ),
+                vol.Optional(
+                    "media_entity",
+                    description={"suggested_value": suggested_media},
+                ): selector({"entity": {"filter": [{"domain": ["media_player"]}]}}),
+                vol.Optional("work_entity"): selector({"entity": {}}),
+            }
+        )
+        return self.async_show_form(
+            step_id="add_starter_states", data_schema=schema, errors=errors
+        )
 
     async def async_step_profile(
         self, user_input: dict[str, Any] | None = None

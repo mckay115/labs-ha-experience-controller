@@ -133,10 +133,9 @@ async def test_entering_settles_straight_into_evidence_state(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    # The desk seat is both presence and Work evidence.
+    # The desk seat is both presence and Work evidence: live evidence
+    # fast-tracks straight to occupied — no wake ramp.
     await set_state(hass, "binary_sensor.desk_seat", "on")
-    assert hass.states.get(PHASE).state == "waking"
-    await advance(hass, freezer, WAKE + 1)
     assert hass.states.get(PHASE).state == "occupied"
     assert hass.states.get(SELECT).state == "Work"
 

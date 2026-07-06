@@ -216,6 +216,45 @@ async def test_target_lux_compensation(hass: HomeAssistant, freezer) -> None:
     )
 
 
+async def test_lux_loop_runs_for_fixed_color_states(
+    hass: HomeAssistant, freezer
+) -> None:
+    """Target-lux compensation must tick even when the state color is fixed."""
+    freezer.move_to(EVENING)
+    turn_on = async_mock_service(hass, "light", "turn_on")
+    async_mock_service(hass, "light", "turn_off")
+    entry = make_snug(
+        illuminance_sensor="sensor.lux",
+        target_lux=200,
+        states=[
+            {"id": "warm_room", "name": "Warm room", "priority": 0,
+             "light_roles": ["ambient"], "light_color": "warm"},
+        ],
+    )
+    hass.states.async_set("sensor.lux", "50")
+    await setup_snug(hass, entry)
+
+    hass.states.async_set("binary_sensor.motion", "on")
+    await hass.async_block_till_done()
+    await advance(hass, freezer, WAKE + 1)
+    assert hass.states.get(SELECT).state == "Warm room"
+
+    baseline = calls_for(turn_on, "light.main")[-1]
+    assert baseline.data["color_temp_kelvin"] == 2700  # fixed warm
+    hass.states.async_set(
+        "light.main",
+        "on",
+        {"supported_color_modes": ["color_temp"]},
+        context=baseline.context,
+    )
+    await hass.async_block_till_done()
+
+    # Still 150 lx short of target: the next tick brightens (bounded +20%).
+    await advance(hass, freezer, 360)
+    adjustments = [call for call in turn_on if "brightness_step_pct" in call.data]
+    assert adjustments and adjustments[-1].data["brightness_step_pct"] == 20
+
+
 async def test_daypart_gated_states(hass: HomeAssistant, freezer) -> None:
     freezer.move_to(EVENING)
     async_mock_service(hass, "light", "turn_on")

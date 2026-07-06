@@ -320,7 +320,11 @@ class SpaceEngine:
             self._cancel_clear()
             self._cancel_cooldown()
             if self.phase is Phase.VACANT:
-                if self.config.wake_duration > 0:
+                if self._infer_state().evidence_entities:
+                    # Evidence is already live (TV playing, desk in use):
+                    # recognize the occupant instantly, no wake ramp.
+                    self._become_occupied()
+                elif self.config.wake_duration > 0:
                     self._enter_waking()
                 else:
                     self._become_occupied()

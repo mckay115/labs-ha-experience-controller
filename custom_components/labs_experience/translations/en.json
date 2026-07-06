@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Create a space",
-        "description": "A space wraps an area with presence tracking, an occupancy lifecycle, and experience states.",
+        "description": "A space wraps an area with presence tracking, an occupancy lifecycle, and experience states. Picking an area builds the room profile automatically; everything can be tuned later via Configure — start with 'Add common states'.",
         "data": {
           "name": "Name",
           "area_id": "Area",
@@ -37,18 +37,50 @@
         "title": "Manage this space",
         "menu_options": {
           "basics": "Presence & timing",
-          "profile": "Room profile (lights, climate, media, openings)",
+          "profile_menu": "Room profile & comfort (lights, circadian, climate)",
+          "states_menu": "Experience states",
+          "controls_menu": "Controls (buttons, switches, remotes)",
+          "phase_actions": "Wake, cool-down, vacant & pass-through actions"
+        }
+      },
+      "profile_menu": {
+        "title": "Room profile & comfort",
+        "menu_options": {
+          "profile": "Assign lights, climate, media & openings",
           "fill_from_area": "Fill the room profile from the area",
           "lighting_settings": "Lighting & circadian settings",
-          "climate_settings": "Climate settings",
-          "phase_actions": "Wake, cool-down, vacant & pass-through actions",
-          "add_state": "Add an experience state",
-          "edit_state": "Edit an experience state",
-          "remove_states": "Remove experience states",
+          "climate_settings": "Climate settings"
+        }
+      },
+      "states_menu": {
+        "title": "Experience states",
+        "menu_options": {
+          "add_starter_states": "Add common states (recommended start)",
+          "add_state": "Add a custom state",
+          "edit_state": "Edit a state",
+          "remove_states": "Remove states"
+        }
+      },
+      "controls_menu": {
+        "title": "Controls",
+        "menu_options": {
           "discover_control": "Add a control by pressing it",
-          "add_control": "Add a control manually (button, switch, remote)",
+          "add_control": "Add a control manually",
           "edit_control": "Edit a control",
           "remove_controls": "Remove controls"
+        }
+      },
+      "add_starter_states": {
+        "title": "Add common states",
+        "description": "Pre-tuned states for how rooms actually get used. Everything they set can be edited afterwards.",
+        "data": {
+          "templates": "States to add",
+          "media_entity": "Media player (for Media)",
+          "work_entity": "Work evidence (for Working)"
+        },
+        "data_description": {
+          "media_entity": "Playing on this player switches the room to Media and holds it occupied through quiet stretches.",
+          "work_entity": "Anything that means work is happening: a desk seat sensor, desk lamp switch, computer power plug."
         }
       },
       "basics": {
@@ -288,7 +320,10 @@
       "press_control": "Press the button or control you want to bind now — the first press detected will be mapped."
     },
     "error": {
-      "state_required": "Pick an experience state for the Set state command."
+      "state_required": "Pick an experience state for the Set state command.",
+      "no_templates": "Pick at least one state to add (states already in this space are skipped).",
+      "media_entity_required": "The Media state needs a media player.",
+      "work_entity_required": "The Working state needs a work evidence entity."
     },
     "abort": {
       "state_not_found": "That state no longer exists.",
@@ -349,6 +384,14 @@
         "comfort": "Comfort",
         "eco": "Eco",
         "off": "Off"
+      }
+    },
+    "starter_templates": {
+      "options": {
+        "hanging_out": "Hanging out — circadian ambient baseline",
+        "media": "Media — movie lighting, holds occupancy while playing",
+        "working": "Working — full task lighting while work evidence is active",
+        "night_light": "Night light — gentle night-only baseline"
       }
     }
   },

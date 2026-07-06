@@ -245,26 +245,29 @@ class LightingFacet:
 
     @callback
     def on_tick(self) -> None:
-        """Drift color/brightness along the circadian curve."""
+        """Periodic upkeep: circadian drift and lux compensation.
+
+        The two are independent — a fixed-color state still gets its
+        brightness held at the target lux level.
+        """
         spec = self._current_spec
         if (
             not self.active
-            or not self.circadian_enabled
             or self.authority is Authority.MANUAL
             or self.engine.phase is not Phase.OCCUPIED
             or spec is None
-            or spec.color != LIGHT_COLOR_CIRCADIAN
         ):
             return
-        kelvin, brightness = self._targets()
-        if spec.brightness is not None or self._lux_mode:
-            # Explicit or lux-driven brightness: circadian only drifts color.
-            brightness = None
-        self._turn_on(
-            self._on_lights(self.engine.config.role_lights(spec.roles)),
-            brightness,
-            kelvin,
-        )
+        if self.circadian_enabled and spec.color == LIGHT_COLOR_CIRCADIAN:
+            kelvin, brightness = self._targets()
+            if spec.brightness is not None or self._lux_mode:
+                # Explicit or lux-driven brightness: only drift color.
+                brightness = None
+            self._turn_on(
+                self._on_lights(self.engine.config.role_lights(spec.roles)),
+                brightness,
+                kelvin,
+            )
         self._lux_adjust()
 
     # ------------------------------------------------------ lux compensation
